@@ -46,7 +46,7 @@ jobs:
       - name: "Git Checkout"
         uses: actions/checkout@v4
 
-      - name: Set up Go
+      - name: "Set up Go"
         uses: actions/setup-go@v4
         with:
           go-version: '1.23.1'
@@ -77,15 +77,72 @@ jobs:
       - name: "Git Checkout"
         uses: actions/checkout@v4
 
-      - name: Set up Go
+      - name: "Set up Go"
         uses: actions/setup-go@v4
         with:
           go-version: '1.23.1'
 
-      - name: "Install gotestsum"
+      - name: "Install gocyclo"
         run: |
           go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
 
-      - name: "Run Go tests"
+      - name: "Run gocyclo"
         run: |
           gocyclo -over 10 .
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Set up Go"
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.1'
+
+      - name: "Install golangci-lint"
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+      - name: "Run golangci-lint"
+        run: |
+          golangci-lint run
+
+  check-licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Set up Go"
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.1'
+
+      - name: "Install go-licenses"
+        run: |
+          go install github.com/google/go-licenses@latest
+
+      - name: "Run go-licenses"
+        run: |
+          go-licenses report ./...
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Set up Go"
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.1'
+
+      - name: "Install gosec"
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: "Run gosec"
+        run: |
+          gosec ./...
