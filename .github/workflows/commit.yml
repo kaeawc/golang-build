@@ -26,7 +26,7 @@ jobs:
           go-version: '1.23.1'
 
       - name: "Compile Go binary"
-        run: go build cmd/server/main.go -exec=true -toolexec=$PWD/ci/go-compile-without-link.sh -vet=off
+        run: go build -toolexec=$PWD/ci/go-compile-without-link.sh cmd/server/main.go
 
   build-image:
     runs-on: ubuntu-latest
