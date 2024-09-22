@@ -59,7 +59,7 @@ jobs:
         run: |
           gotestsum --junitfile junit-report.xml --format standard-verbose
 
-      - name: "Check if JUnit test reports were created"
+      - name: "Check if test reports were created"
         id: junit-reports-exist
         uses: andstor/file-existence-action@v2
         with:
@@ -145,4 +145,16 @@ jobs:
 
       - name: "Run gosec"
         run: |
-          gosec ./...
+          gosec -fmt=junit-xml -out=gosec-report.xml ./...
+
+      - name: "Check if security report was created"
+        id: gosec-report-exists
+        uses: andstor/file-existence-action@v2
+        with:
+          files: "gosec-report.xml"
+
+      - name: "Publish Security Report"
+        uses: mikepenz/action-junit-report@v4
+        if: steps.gosec-report-exists.outputs.files_exists == 'true'
+        with:
+          report_paths: 'gosec-report.xml'
