@@ -70,3 +70,22 @@ jobs:
         if: steps.junit-reports-exist.outputs.files_exists == 'true'
         with:
           report_paths: 'junit-report.xml'
+
+  complexity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.1'
+
+      - name: "Install gotestsum"
+        run: |
+          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+
+      - name: "Run Go tests"
+        run: |
+          gocyclo -over 10 .
