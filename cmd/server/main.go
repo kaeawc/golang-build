@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/kaeawc/golang-build/internal/handlers"
@@ -16,6 +17,17 @@ func main() {
 	router.Use(middleware.Recover)
 	router.Use(middleware.ContentType)
 	router.HandleFunc("/users", handlers.GetUsers()).Methods("GET")
+
+	// Define the server with timeouts
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      router,
+		ReadTimeout:  5 * time.Second,   // Timeout for reading the request
+		WriteTimeout: 10 * time.Second,  // Timeout for writing the response
+		IdleTimeout:  120 * time.Second, // Timeout for idle connections
+	}
+
 	log.Println("Server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	// Start the server with proper timeout settings
+	log.Fatal(server.ListenAndServe())
 }
