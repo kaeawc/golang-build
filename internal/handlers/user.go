@@ -19,6 +19,10 @@ func GetUsers() http.HandlerFunc {
 			{ID: 3, Name: "Charlie"},
 		}
 
-		json.NewEncoder(w).Encode(users)
+		err := json.NewEncoder(w).Encode(users)
+		if err != nil {
+			http.Error(w, "Failed to encode users", http.StatusInternalServerError)
+			return
+		}
 	}
 }
