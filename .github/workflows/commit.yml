@@ -23,7 +23,7 @@ jobs:
       - name: "Set up Go"
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.1'
+          go-version-file: 'go.mod'
 
       - name: "Compile Go binary"
         run: go build cmd/server/main.go
@@ -54,7 +54,7 @@ jobs:
       - name: "Set up Go"
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.1'
+          go-version-file: 'go.mod'
 
       - name: "Install gotestsum"
         run: |
@@ -85,7 +85,7 @@ jobs:
       - name: "Set up Go"
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.1'
+          go-version-file: 'go.mod'
 
       - name: "Install gocyclo"
         run: |
@@ -104,7 +104,7 @@ jobs:
       - name: "Set up Go"
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.1'
+          go-version-file: 'go.mod'
 
       - name: "Install golangci-lint"
         run: |
@@ -123,7 +123,7 @@ jobs:
       - name: "Set up Go"
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.1'
+          go-version-file: 'go.mod'
 
       - name: "Install go-licenses"
         run: |
@@ -142,7 +142,7 @@ jobs:
       - name: "Set up Go"
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.1'
+          go-version-file: 'go.mod'
 
       - name: "Install gosec"
         run: |
