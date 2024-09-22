@@ -39,3 +39,12 @@ jobs:
 
       - name: "Push Docker image"
         run: docker push ghcr.io/${{ github.repository_owner }}/golang-build:latest
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Run All Tests"
+        run: go test ./...
