@@ -163,3 +163,20 @@ jobs:
         if: steps.gosec-report-exists.outputs.files_exists == 'true'
         with:
           report_paths: 'gosec-report.xml'
+
+  codeql-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      security-events: write
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Initialize CodeQL"
+        uses: github/codeql-action/init@v2
+        with:
+          languages: 'go'
+
+      - name: "Perform CodeQL Analysis"
+        uses: github/codeql-action/analyze@v2
