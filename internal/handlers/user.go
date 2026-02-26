@@ -1,28 +1,56 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
+
+	"github.com/kaeawc/golang-build/internal/cache"
+	"github.com/kaeawc/golang-build/internal/db"
 )
 
 type User struct {
-	ID   int    `json:"id"`
+	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
-func GetUsers() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+type UserQuerier interface {
+	GetUsers(ctx context.Context) ([]db.User, error)
+}
 
-		users := []User{
-			{ID: 1, Name: "Alice"},
-			{ID: 2, Name: "Bob"},
-			{ID: 3, Name: "Charlie"},
+func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const cacheKey = "users"
+
+		cached, err := c.Get(r.Context(), cacheKey)
+		if err == nil {
+			w.Write([]byte(cached))
+			return
 		}
 
-		err := json.NewEncoder(w).Encode(users)
+		dbUsers, err := querier.GetUsers(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to get users", http.StatusInternalServerError)
+			return
+		}
+
+		users := make([]User, len(dbUsers))
+		for i, u := range dbUsers {
+			users[i] = User{ID: u.ID, Name: u.Name}
+		}
+
+		data, err := json.Marshal(users)
 		if err != nil {
 			http.Error(w, "Failed to encode users", http.StatusInternalServerError)
 			return
 		}
+
+		if err := c.Set(r.Context(), cacheKey, string(data), 30*time.Second); err != nil {
+			log.Printf("cache set error: %v", err)
+		}
+
+		w.Write(data)
 	}
 }

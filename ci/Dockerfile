@@ -13,7 +13,7 @@ RUN go mod download
 COPY . .
 
 # Build the Go binary
-RUN go build cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/server/main.go
 
 # Final stage: start from scratch to minify the final image
 FROM scratch
