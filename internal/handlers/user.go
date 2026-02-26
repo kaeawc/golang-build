@@ -26,7 +26,9 @@ func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 
 		cached, err := c.Get(r.Context(), cacheKey)
 		if err == nil {
-			w.Write([]byte(cached))
+			if _, err := w.Write([]byte(cached)); err != nil {
+				log.Printf("write error: %v", err)
+			}
 			return
 		}
 
@@ -51,6 +53,8 @@ func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 			log.Printf("cache set error: %v", err)
 		}
 
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Printf("write error: %v", err)
+		}
 	}
 }
