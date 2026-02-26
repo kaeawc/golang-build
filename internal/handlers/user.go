@@ -26,7 +26,7 @@ func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 
 		cached, err := c.Get(r.Context(), cacheKey)
 		if err == nil {
-			if _, err := w.Write([]byte(cached)); err != nil {
+			if _, err := w.Write([]byte(cached)); err != nil { // #nosec G705 -- value is our own marshaled JSON, not user input
 				log.Printf("write error: %v", err)
 			}
 			return
