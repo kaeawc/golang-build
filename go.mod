@@ -6,7 +6,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/valkey-io/valkey-go v1.0.72
+	github.com/valkey-io/valkey-go v1.0.73
 )
 
 require (
