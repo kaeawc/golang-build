@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.1
 	github.com/valkey-io/valkey-go v1.0.73
 )
 
