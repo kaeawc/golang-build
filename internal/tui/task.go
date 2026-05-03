@@ -22,7 +22,6 @@ type AsyncTask struct {
 	label   string
 	fn      func() (any, error)
 	spinner spinner.Model
-	started bool
 }
 
 // NewAsyncTask constructs an AsyncTask. The worker fn runs once on

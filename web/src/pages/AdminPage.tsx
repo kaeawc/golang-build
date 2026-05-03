@@ -14,36 +14,44 @@ type TrafficStat = {
   totalNanos: number
 }
 
-type Tab = 'users' | 'health' | 'traffic'
+type Tab = { id: 'users' | 'health' | 'traffic'; label: string; desc: string }
+
+const tabs: Tab[] = [
+  { id: 'users', label: 'Users', desc: 'Application accounts.' },
+  { id: 'health', label: 'Health', desc: 'Live probes against backing services.' },
+  { id: 'traffic', label: 'Traffic', desc: 'Per-route counters since process start.' },
+]
 
 export function AdminPage() {
-  const [tab, setTab] = useState<Tab>('users')
+  const [active, setActive] = useState<Tab['id']>('users')
+  const tab = tabs.find((t) => t.id === active)!
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Admin</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">Admin</h1>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tab.desc}</p>
 
       <nav className="mt-6 flex gap-1 border-b border-gray-200 dark:border-gray-800">
-        {(['users', 'health', 'traffic'] as Tab[]).map((t) => (
+        {tabs.map((t) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={t.id}
+            onClick={() => setActive(t.id)}
             className={
-              'px-4 py-2 text-sm capitalize -mb-px border-b-2 ' +
-              (tab === t
+              'px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ' +
+              (active === t.id
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white')
             }
           >
-            {t}
+            {t.label}
           </button>
         ))}
       </nav>
 
       <section className="mt-6">
-        {tab === 'users' && <UsersPanel />}
-        {tab === 'health' && <HealthPanel />}
-        {tab === 'traffic' && <TrafficPanel />}
+        {active === 'users' && <UsersPanel />}
+        {active === 'health' && <HealthPanel />}
+        {active === 'traffic' && <TrafficPanel />}
       </section>
     </div>
   )
@@ -81,90 +89,127 @@ function useFetch<T>(url: string, refreshMs?: number): { data: T | null; error: 
   return { data, error }
 }
 
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+      {children}
+    </div>
+  )
+}
+
+function StateLine({ kind, children }: { kind: 'error' | 'loading' | 'empty'; children: React.ReactNode }) {
+  const cls =
+    kind === 'error'
+      ? 'text-red-600 dark:text-red-400'
+      : 'text-gray-500 dark:text-gray-400'
+  return <p className={`text-sm ${cls}`}>{children}</p>
+}
+
 function UsersPanel() {
   const { data, error } = useFetch<User[]>('/api/users')
-  if (error) return <p className="text-red-600">Error: {error}</p>
-  if (!data) return <p className="text-gray-500">Loading…</p>
+  if (error) return <StateLine kind="error">Error: {error}</StateLine>
+  if (!data) return <StateLine kind="loading">Loading…</StateLine>
+  if (data.length === 0) return <StateLine kind="empty">No users yet.</StateLine>
   return (
-    <ul className="divide-y divide-gray-200 dark:divide-gray-800 rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-      {data.length === 0 && <li className="p-3 text-gray-500">No users yet.</li>}
-      {data.map((u) => (
-        <li key={u.id} className="p-3">
-          <span className="font-mono text-sm text-gray-500">#{u.id}</span> {u.name}
-        </li>
-      ))}
-    </ul>
+    <Card>
+      <ul className="divide-y divide-gray-200 dark:divide-gray-800">
+        {data.map((u) => (
+          <li key={u.id} className="flex items-center gap-3 p-4 text-sm text-gray-700 dark:text-gray-300">
+            <span className="font-mono text-xs text-gray-500">#{u.id}</span>
+            <span className="text-gray-900 dark:text-white">{u.name}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 
 function HealthPanel() {
   const { data, error } = useFetch<Probe[]>('/api/admin/healthchecks', 5000)
-  if (error) return <p className="text-red-600">Error: {error}</p>
-  if (!data) return <p className="text-gray-500">Loading…</p>
+  if (error) return <StateLine kind="error">Error: {error}</StateLine>
+  if (!data) return <StateLine kind="loading">Loading…</StateLine>
   return (
-    <ul className="divide-y divide-gray-200 dark:divide-gray-800 rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-      {data.map((p) => (
-        <li key={p.name} className="flex items-center justify-between p-3">
-          <span className="flex items-center gap-2">
-            <span
-              className={
-                'inline-block h-2 w-2 rounded-full ' +
-                (p.healthy ? 'bg-green-500' : 'bg-red-500')
-              }
-            />
-            <span className="font-medium">{p.name}</span>
-            {p.err && <span className="ml-2 text-xs text-red-600">{p.err}</span>}
-          </span>
-          <span className="font-mono text-xs text-gray-500">
-            {(p.latencyNs / 1e6).toFixed(1)} ms
-          </span>
-        </li>
-      ))}
-    </ul>
+    <Card>
+      <ul className="divide-y divide-gray-200 dark:divide-gray-800">
+        {data.map((p) => (
+          <li key={p.name} className="flex items-center justify-between p-4">
+            <span className="flex items-center gap-3">
+              <span
+                className={
+                  'inline-block h-2 w-2 rounded-full ' +
+                  (p.healthy ? 'bg-emerald-500' : 'bg-red-500')
+                }
+              />
+              <span className="font-medium text-gray-900 dark:text-white">{p.name}</span>
+              <span
+                className={
+                  'text-xs ' +
+                  (p.healthy
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-red-600 dark:text-red-400')
+                }
+              >
+                {p.healthy ? 'healthy' : 'unhealthy'}
+              </span>
+              {p.err && (
+                <span className="text-xs text-red-600 dark:text-red-400">{p.err}</span>
+              )}
+            </span>
+            <span className="font-mono text-xs text-gray-500">
+              {(p.latencyNs / 1e6).toFixed(1)} ms
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 
 function TrafficPanel() {
   const { data, error } = useFetch<TrafficStat[]>('/api/admin/traffic', 2000)
-  if (error) return <p className="text-red-600">Error: {error}</p>
-  if (!data) return <p className="text-gray-500">Loading…</p>
-  if (data.length === 0)
-    return <p className="text-gray-500">No traffic recorded yet.</p>
+  if (error) return <StateLine kind="error">Error: {error}</StateLine>
+  if (!data) return <StateLine kind="loading">Loading…</StateLine>
+  if (data.length === 0) return <StateLine kind="empty">No traffic recorded yet.</StateLine>
 
   const sorted = [...data].sort((a, b) => b.count - a.count)
   return (
-    <table className="w-full overflow-hidden rounded border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm">
-      <thead className="bg-gray-50 dark:bg-gray-800 text-left text-xs uppercase text-gray-600 dark:text-gray-400">
-        <tr>
-          <th className="p-2">Route</th>
-          <th className="p-2 text-right">Count</th>
-          <th className="p-2 text-right">2xx</th>
-          <th className="p-2 text-right">4xx</th>
-          <th className="p-2 text-right">5xx</th>
-          <th className="p-2 text-right">Avg</th>
-          <th className="p-2 text-right">Last</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-        {sorted.map((s) => {
-          const avgMs = s.count > 0 ? s.totalNanos / s.count / 1e6 : 0
-          return (
-            <tr key={s.method + ' ' + s.path}>
-              <td className="p-2 font-mono">
-                <span className="text-gray-500">{s.method}</span> {s.path}
-              </td>
-              <td className="p-2 text-right">{s.count}</td>
-              <td className="p-2 text-right text-green-700 dark:text-green-400">{s.status2xx}</td>
-              <td className="p-2 text-right text-amber-700 dark:text-amber-400">{s.status4xx}</td>
-              <td className="p-2 text-right text-red-700 dark:text-red-400">{s.status5xx}</td>
-              <td className="p-2 text-right font-mono text-xs">{avgMs.toFixed(1)} ms</td>
-              <td className="p-2 text-right font-mono text-xs">
-                {(s.lastNanos / 1e6).toFixed(1)} ms
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <Card>
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 dark:bg-gray-800/50 text-left text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          <tr>
+            <th className="px-4 py-2 font-medium">Route</th>
+            <th className="px-4 py-2 font-medium text-right">Count</th>
+            <th className="px-4 py-2 font-medium text-right">2xx</th>
+            <th className="px-4 py-2 font-medium text-right">4xx</th>
+            <th className="px-4 py-2 font-medium text-right">5xx</th>
+            <th className="px-4 py-2 font-medium text-right">Avg</th>
+            <th className="px-4 py-2 font-medium text-right">Last</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+          {sorted.map((s) => {
+            const avgMs = s.count > 0 ? s.totalNanos / s.count / 1e6 : 0
+            return (
+              <tr key={s.method + ' ' + s.path}>
+                <td className="px-4 py-2 font-mono text-xs">
+                  <span className="inline-flex items-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 mr-2 font-medium">
+                    {s.method}
+                  </span>
+                  <span className="text-gray-900 dark:text-white">{s.path}</span>
+                </td>
+                <td className="px-4 py-2 text-right text-gray-900 dark:text-white">{s.count}</td>
+                <td className="px-4 py-2 text-right text-emerald-600 dark:text-emerald-400">{s.status2xx}</td>
+                <td className="px-4 py-2 text-right text-amber-600 dark:text-amber-400">{s.status4xx}</td>
+                <td className="px-4 py-2 text-right text-red-600 dark:text-red-400">{s.status5xx}</td>
+                <td className="px-4 py-2 text-right font-mono text-xs text-gray-600 dark:text-gray-400">{avgMs.toFixed(1)} ms</td>
+                <td className="px-4 py-2 text-right font-mono text-xs text-gray-600 dark:text-gray-400">
+                  {(s.lastNanos / 1e6).toFixed(1)} ms
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </Card>
   )
 }

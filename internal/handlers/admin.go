@@ -23,7 +23,7 @@ type Probe struct {
 }
 
 func AdminTraffic(rec *middleware.TrafficRecorder) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, rec.Snapshot())
 	}
 }
