@@ -10,6 +10,9 @@ build:
 build-onboard:
 	go build -ldflags "$(LDFLAGS)" -o onboard ./cmd/onboard/
 
+build-loadgen:
+	go build -ldflags "$(LDFLAGS)" -o loadgen ./cmd/loadgen/
+
 test:
 	go test ./... -count=1
 
@@ -43,6 +46,6 @@ validate-workflows:
 	bash scripts/validate-workflows.sh
 
 clean:
-	rm -f $(BIN) onboard junit-report.xml gosec-report.xml
+	rm -f $(BIN) onboard loadgen junit-report.xml gosec-report.xml
 
 all: build vet test
