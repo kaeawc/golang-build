@@ -35,7 +35,7 @@ func (v VersionedDir) Open() (entriesDir string, err error) {
 	}
 	entriesPath := filepath.Join(v.Root, entriesSub)
 
-	if err := os.MkdirAll(entriesPath, 0o755); err != nil {
+	if err := os.MkdirAll(entriesPath, 0o750); err != nil {
 		return "", fmt.Errorf("cacheutil: mkdir entries: %w", err)
 	}
 
@@ -84,7 +84,7 @@ func (v VersionedDir) nukeEntries(entriesPath string) error {
 	if err := os.RemoveAll(entriesPath); err != nil {
 		return fmt.Errorf("cacheutil: remove entries: %w", err)
 	}
-	if err := os.MkdirAll(entriesPath, 0o755); err != nil {
+	if err := os.MkdirAll(entriesPath, 0o750); err != nil {
 		return fmt.Errorf("cacheutil: mkdir entries after nuke: %w", err)
 	}
 	for _, extra := range v.ExtraDirs {

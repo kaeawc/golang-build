@@ -28,6 +28,13 @@ linters:
       disable:
         - fieldalignment
         - shadow
+    gosec:
+      excludes:
+        - G104  # best-effort cleanup is intentional
+        - G304  # path is caller input by design (vfs/fsutil/cacheutil)
+        - G602  # false positive on UintN(256) → byte
+        - G703  # same path-as-input rationale as G304
+        - G704  # httpx URL is caller input by design
   exclusions:
     generated: lax
     presets:
