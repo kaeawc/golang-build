@@ -49,7 +49,7 @@ func main() {
 	if err := riverClient.Start(ctx); err != nil {
 		log.Fatalf("river start: %v", err)
 	}
-	coord.Register("river", riverClient.Stop)
+	coord.Register("river", jobs.Stop(riverClient))
 
 	router := buildRouter(pool, c)
 
