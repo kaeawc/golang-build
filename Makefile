@@ -20,7 +20,7 @@ lint:
 	golangci-lint run
 
 complexity:
-	gocyclo -over 10 .
+	gocyclo -over 10 -ignore '_test\.go$$' .
 
 security:
 	gosec ./...

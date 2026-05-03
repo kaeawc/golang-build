@@ -213,15 +213,11 @@ func (m *Mem) ReadDir(path string) ([]os.DirEntry, error) {
 	clean := filepath.Clean(path)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if clean != "." {
-		e, ok := m.files[clean]
-		if !ok {
-			return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
-		}
-		if !e.dir {
-			return nil, &fs.PathError{Op: "fdopendir", Path: path, Err: errNotDirectory}
-		}
+
+	if err := m.assertReadDirTarget(path, clean); err != nil {
+		return nil, err
 	}
+
 	prefix := clean + string(filepath.Separator)
 	if clean == "." {
 		prefix = ""
@@ -232,20 +228,8 @@ func (m *Mem) ReadDir(path string) ([]os.DirEntry, error) {
 		if p == clean {
 			continue
 		}
-		var rel string
-		if prefix == "" {
-			rel = p
-		} else {
-			if !strings.HasPrefix(p, prefix) {
-				continue
-			}
-			rel = p[len(prefix):]
-		}
-		// Take only direct children — strip everything after the first separator.
-		if idx := strings.Index(rel, string(filepath.Separator)); idx >= 0 {
-			rel = rel[:idx]
-		}
-		if rel == "" || seen[rel] {
+		rel, ok := relativeChild(p, prefix)
+		if !ok || seen[rel] {
 			continue
 		}
 		seen[rel] = true
@@ -253,6 +237,41 @@ func (m *Mem) ReadDir(path string) ([]os.DirEntry, error) {
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	return entries, nil
+}
+
+// assertReadDirTarget checks that clean exists and is a directory, unless
+// clean is "." (the implicit root).
+func (m *Mem) assertReadDirTarget(path, clean string) error {
+	if clean == "." {
+		return nil
+	}
+	e, ok := m.files[clean]
+	if !ok {
+		return &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
+	}
+	if !e.dir {
+		return &fs.PathError{Op: "fdopendir", Path: path, Err: errNotDirectory}
+	}
+	return nil
+}
+
+// relativeChild returns the immediate-child name of p under prefix, or
+// ("", false) if p is not under prefix.
+func relativeChild(p, prefix string) (string, bool) {
+	rel := p
+	if prefix != "" {
+		if !strings.HasPrefix(p, prefix) {
+			return "", false
+		}
+		rel = p[len(prefix):]
+	}
+	if idx := strings.Index(rel, string(filepath.Separator)); idx >= 0 {
+		rel = rel[:idx]
+	}
+	if rel == "" {
+		return "", false
+	}
+	return rel, true
 }
 
 // memInfo implements os.FileInfo for Mem entries.
@@ -283,7 +302,7 @@ func (d memDirEntry) Type() os.FileMode {
 	return 0
 }
 func (d memDirEntry) Info() (os.FileInfo, error) {
-	return memInfo{name: d.name, entry: d.entry}, nil
+	return memInfo(d), nil
 }
 
 // Sentinel errors for situations the os package surfaces with

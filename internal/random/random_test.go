@@ -102,9 +102,6 @@ func TestPickAndShuffle(t *testing.T) {
 	if sum1 != sum2 {
 		t.Errorf("Shuffle changed elements: %v vs %v", items, shuffled)
 	}
-	if items[0] == 1 && items[1] == 2 && items[2] == 3 && items[3] == 4 && items[4] == 5 {
-		// original untouched (Shuffle returns a copy)
-	}
 	if &items[0] == &shuffled[0] {
 		t.Error("Shuffle should not alias the input slice")
 	}

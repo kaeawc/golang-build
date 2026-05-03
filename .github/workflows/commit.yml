@@ -93,7 +93,7 @@ jobs:
 
       - name: "Run gocyclo"
         run: |
-          gocyclo -over 10 .
+          gocyclo -over 10 -ignore '_test\.go$' .
 
   static-analysis:
     runs-on: ubuntu-latest

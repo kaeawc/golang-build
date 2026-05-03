@@ -115,14 +115,14 @@ func New(s Sleeper, r random.Random) *Executor {
 // returned error is the last error from op, wrapped with attempt info. If
 // ctx is canceled mid-retry, Do returns ctx.Err().
 func (e *Executor) Do(ctx context.Context, p Policy, op func(ctx context.Context, attempt int) error) error {
-	max := p.maxAttempts()
+	maxN := p.maxAttempts()
 	retryable := p.Retryable
 	if retryable == nil {
 		retryable = func(error) bool { return true }
 	}
 
 	var lastErr error
-	for attempt := 1; attempt <= max; attempt++ {
+	for attempt := 1; attempt <= maxN; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -133,7 +133,7 @@ func (e *Executor) Do(ctx context.Context, p Policy, op func(ctx context.Context
 		}
 		lastErr = err
 
-		if attempt == max {
+		if attempt == maxN {
 			break
 		}
 		if !retryable(err) {
@@ -153,7 +153,7 @@ func (e *Executor) Do(ctx context.Context, p Policy, op func(ctx context.Context
 	if lastErr == nil {
 		return errors.New("retry: no attempts ran")
 	}
-	return fmt.Errorf("retry: exhausted %d attempts: %w", max, lastErr)
+	return fmt.Errorf("retry: exhausted %d attempts: %w", maxN, lastErr)
 }
 
 func (e *Executor) computeDelay(p Policy, attempt int) time.Duration {

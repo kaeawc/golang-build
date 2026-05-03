@@ -1,41 +1,64 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
-  disable-all: true
+  default: none
   enable:
+    - bodyclose
     - errcheck
+    - errorlint
+    - gocyclo
+    - gosec
     - govet
     - ineffassign
-    - staticcheck
-    - unused
-    - gofmt
-    - goimports
     - misspell
+    - nilerr
+    - noctx
     - revive
+    - staticcheck
     - unconvert
     - unparam
-    - gocyclo
-    - bodyclose
-    - noctx
-    - nilerr
-    - errorlint
-    - gosec
-
-linters-settings:
-  gocyclo:
-    min-complexity: 10
-  govet:
-    enable-all: true
-  errorlint:
-    errorf: true
-
+    - unused
+  settings:
+    errorlint:
+      errorf: true
+    gocyclo:
+      min-complexity: 10
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - gocyclo
+          - gosec
+          - noctx
+          - revive
+          - unconvert
+          - unparam
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -54,6 +54,7 @@ type OS struct{}
 
 // Run implements Runner using exec.CommandContext.
 func (OS) Run(ctx context.Context, cmd Cmd) (Result, error) {
+	// #nosec G204 -- proc.Runner is the abstraction for running caller-supplied subprocess commands
 	c := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
 	if cmd.Dir != "" {
 		c.Dir = cmd.Dir

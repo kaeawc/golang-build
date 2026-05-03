@@ -140,6 +140,6 @@ func (s *fallbackSpan) Stop() {
 
 type noopSpan struct{}
 
-func (noopSpan) SetAttr(string, string)    {}
-func (noopSpan) AddMetric(string, int64)   {}
-func (noopSpan) Stop()                     {}
+func (noopSpan) SetAttr(string, string)  {}
+func (noopSpan) AddMetric(string, int64) {}
+func (noopSpan) Stop()                   {}

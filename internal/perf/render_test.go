@@ -92,8 +92,8 @@ func TestFormatDurUnits(t *testing.T) {
 		ms   int64
 		want string
 	}{
-		{0, "0ns"},                 // sub-µs
-		{0, "0ns"},                 // exact
+		{0, "0ns"}, // sub-µs
+		{0, "0ns"}, // exact
 	}
 	_ = cases
 	// Spot-check ranges.

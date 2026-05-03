@@ -71,7 +71,7 @@ func TestTempfileCleanup(t *testing.T) {
 	path := filepath.Join(dir, "data.bin")
 
 	writeErr := errors.New("simulated write failure")
-	err := WriteFileAtomicStream(path, 0o644, func(w io.Writer) error {
+	err := WriteFileAtomicStream(path, 0o644, func(_ io.Writer) error {
 		return writeErr
 	})
 	if err == nil {

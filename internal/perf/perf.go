@@ -54,13 +54,12 @@ func NewWithClock(clk clock.Clock) Tracker {
 // --- real tracker ---
 
 type realTracker struct {
-	mu       sync.Mutex
-	entries  []TimingEntry
-	parent   *realTracker
-	name     string
-	start    time.Time
-	children []TimingEntry
-	clk      clock.Clock
+	mu      sync.Mutex
+	entries []TimingEntry
+	parent  *realTracker
+	name    string
+	start   time.Time
+	clk     clock.Clock
 }
 
 func (t *realTracker) now() time.Time {
@@ -206,7 +205,7 @@ type noopTracker struct{}
 
 func (n *noopTracker) IsEnabled() bool                       { return false }
 func (n *noopTracker) Track(_ string, fn func() error) error { return fn() }
-func (n *noopTracker) TrackVoid(_ string, fn func())          { fn() }
+func (n *noopTracker) TrackVoid(_ string, fn func())         { fn() }
 func (n *noopTracker) Serial(_ string) Tracker               { return n }
 func (n *noopTracker) End() Tracker                          { return n }
 func (n *noopTracker) GetTimings() []TimingEntry             { return nil }

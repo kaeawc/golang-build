@@ -39,45 +39,13 @@ func (v VersionedDir) Open() (entriesDir string, err error) {
 		return "", fmt.Errorf("cacheutil: mkdir entries: %w", err)
 	}
 
-	nuke := false
-	for _, token := range v.Tokens {
-		sidecar := filepath.Join(v.Root, token.Name)
-		data, err := os.ReadFile(sidecar)
-		if err != nil {
-			if os.IsNotExist(err) {
-				// First run — no nuke, just write sidecar after
-				continue
-			}
-			return "", fmt.Errorf("cacheutil: read sidecar %s: %w", token.Name, err)
-		}
-		if string(data) != token.Value {
-			nuke = true
-			break
-		}
+	nuke, err := v.tokensMismatched()
+	if err != nil {
+		return "", err
 	}
-
 	if nuke {
-		if err := os.RemoveAll(entriesPath); err != nil {
-			return "", fmt.Errorf("cacheutil: remove entries: %w", err)
-		}
-		if err := os.MkdirAll(entriesPath, 0o755); err != nil {
-			return "", fmt.Errorf("cacheutil: mkdir entries after nuke: %w", err)
-		}
-		for _, extra := range v.ExtraDirs {
-			if extra == "" {
-				continue
-			}
-			if err := os.RemoveAll(filepath.Join(v.Root, extra)); err != nil {
-				return "", fmt.Errorf("cacheutil: remove extra dir %s: %w", extra, err)
-			}
-		}
-		for _, extra := range v.ExtraFiles {
-			if extra == "" {
-				continue
-			}
-			if err := os.Remove(filepath.Join(v.Root, extra)); err != nil && !os.IsNotExist(err) {
-				return "", fmt.Errorf("cacheutil: remove extra file %s: %w", extra, err)
-			}
+		if err := v.nukeEntries(entriesPath); err != nil {
+			return "", err
 		}
 	}
 
@@ -91,6 +59,51 @@ func (v VersionedDir) Open() (entriesDir string, err error) {
 	}
 
 	return entriesPath, nil
+}
+
+// tokensMismatched returns true if any present sidecar differs from its token.
+// Missing sidecars (first run) do not count as a mismatch.
+func (v VersionedDir) tokensMismatched() (bool, error) {
+	for _, token := range v.Tokens {
+		sidecar := filepath.Join(v.Root, token.Name)
+		data, err := os.ReadFile(sidecar)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return false, fmt.Errorf("cacheutil: read sidecar %s: %w", token.Name, err)
+		}
+		if string(data) != token.Value {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (v VersionedDir) nukeEntries(entriesPath string) error {
+	if err := os.RemoveAll(entriesPath); err != nil {
+		return fmt.Errorf("cacheutil: remove entries: %w", err)
+	}
+	if err := os.MkdirAll(entriesPath, 0o755); err != nil {
+		return fmt.Errorf("cacheutil: mkdir entries after nuke: %w", err)
+	}
+	for _, extra := range v.ExtraDirs {
+		if extra == "" {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(v.Root, extra)); err != nil {
+			return fmt.Errorf("cacheutil: remove extra dir %s: %w", extra, err)
+		}
+	}
+	for _, extra := range v.ExtraFiles {
+		if extra == "" {
+			continue
+		}
+		if err := os.Remove(filepath.Join(v.Root, extra)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("cacheutil: remove extra file %s: %w", extra, err)
+		}
+	}
+	return nil
 }
 
 // Clear removes the entire cache root. Safe to call when the dir is missing.

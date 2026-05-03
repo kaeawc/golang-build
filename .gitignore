@@ -29,3 +29,4 @@ go.work.sum
 
 # binary output
 main
+.claude/
