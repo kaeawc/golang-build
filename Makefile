@@ -1,4 +1,4 @@
-.PHONY: build test vet lint fmt complexity security licenses tidy ci clean release-check validate-workflows all
+.PHONY: build build-onboard test vet lint fmt complexity security licenses tidy ci clean release-check validate-workflows all
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS = -s -w -X main.version=$(VERSION)
@@ -6,6 +6,9 @@ BIN ?= server
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/server/
+
+build-onboard:
+	go build -ldflags "$(LDFLAGS)" -o onboard ./cmd/onboard/
 
 test:
 	go test ./... -count=1
@@ -40,6 +43,6 @@ validate-workflows:
 	bash scripts/validate-workflows.sh
 
 clean:
-	rm -f $(BIN) junit-report.xml gosec-report.xml
+	rm -f $(BIN) onboard junit-report.xml gosec-report.xml
 
 all: build vet test

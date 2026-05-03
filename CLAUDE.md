@@ -40,8 +40,10 @@ docker build -f ci/Dockerfile -t golang-build:latest .
 ## Architecture
 
 - **`cmd/server/main.go`** — Entry point. Sets up the mux router with middleware chain (Logging → Recover → ContentType) and starts the HTTP server.
+- **`cmd/onboard/`** — TUI wizard that walks the user through generating a `.env` for the server. Demonstrates the `internal/tui` framework.
 - **`internal/handlers/`** — Route handlers. Handlers return `http.HandlerFunc` closures.
 - **`internal/middleware/`** — HTTP middleware (logging, panic recovery, content-type detection). Each middleware is a `func(http.Handler) http.Handler` applied via `router.Use()`.
+- **`internal/tui/`** — Reusable TUI scaffolding built on bubbletea/lipgloss. Exports a `Phase` interface and four reusable phases (`Picker`, `Confirm`, `AsyncTask`, `Done`); callers assemble them into a root `tea.Model`. See `cmd/onboard/model.go` for the canonical example.
 - **`ci/Dockerfile`** — Multi-stage build: compiles in `golang:alpine`, copies binary to `scratch` image.
 
 ## CI Pipeline
