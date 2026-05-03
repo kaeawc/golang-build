@@ -52,19 +52,33 @@ func renderNode(w io.Writer, e TimingEntry, prefix string, isRoot, last bool, pa
 		return nil
 	}
 
-	var connector, childPrefix string
-	switch {
-	case isRoot:
-		connector = ""
-		childPrefix = ""
-	case last:
-		connector = "└─ "
-		childPrefix = prefix + "   "
-	default:
-		connector = "├─ "
-		childPrefix = prefix + "│  "
+	connector, childPrefix := nodeConnectors(prefix, isRoot, last)
+	line := formatNodeLine(prefix, connector, e, parentMs, opts)
+	if _, err := fmt.Fprintln(w, line); err != nil {
+		return err
 	}
 
+	children := orderedChildren(e.Children, opts.SortByDuration)
+	for i, c := range children {
+		if err := renderNode(w, c, childPrefix, false, i == len(children)-1, e.DurationMs, opts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func nodeConnectors(prefix string, isRoot, last bool) (connector, childPrefix string) {
+	switch {
+	case isRoot:
+		return "", ""
+	case last:
+		return "└─ ", prefix + "   "
+	default:
+		return "├─ ", prefix + "│  "
+	}
+}
+
+func formatNodeLine(prefix, connector string, e TimingEntry, parentMs int64, opts RenderOptions) string {
 	line := fmt.Sprintf("%s%s%s %s", prefix, connector, e.Name, formatDur(e.DurationMs))
 	if !opts.HidePercents && parentMs > 0 {
 		line += fmt.Sprintf("  %3d%%", percent(e.DurationMs, parentMs))
@@ -74,25 +88,19 @@ func renderNode(w io.Writer, e TimingEntry, prefix string, isRoot, last bool, pa
 			line += "  " + extra
 		}
 	}
-	if _, err := fmt.Fprintln(w, line); err != nil {
-		return err
-	}
+	return line
+}
 
-	children := e.Children
-	if opts.SortByDuration && len(children) > 1 {
-		sorted := make([]TimingEntry, len(children))
-		copy(sorted, children)
-		sort.SliceStable(sorted, func(i, j int) bool {
-			return sorted[i].DurationMs > sorted[j].DurationMs
-		})
-		children = sorted
+func orderedChildren(children []TimingEntry, sortByDuration bool) []TimingEntry {
+	if !sortByDuration || len(children) <= 1 {
+		return children
 	}
-	for i, c := range children {
-		if err := renderNode(w, c, childPrefix, false, i == len(children)-1, e.DurationMs, opts); err != nil {
-			return err
-		}
-	}
-	return nil
+	sorted := make([]TimingEntry, len(children))
+	copy(sorted, children)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].DurationMs > sorted[j].DurationMs
+	})
+	return sorted
 }
 
 func formatDur(ms int64) string {

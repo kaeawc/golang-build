@@ -20,8 +20,8 @@ type Random interface {
 	Float64() float64
 	// IntN returns an int in [0, n). Panics if n <= 0.
 	IntN(n int) int
-	// IntRange returns an int in [min, max] (both inclusive).
-	IntRange(min, max int) int
+	// IntRange returns an int in [lo, hi] (both inclusive).
+	IntRange(lo, hi int) int
 	// Bytes returns n cryptographically-flavored bytes (or pseudo-random
 	// bytes from a Seeded source). Returns an error if the underlying source
 	// fails (only Crypto can fail).
@@ -53,11 +53,11 @@ func (c *Crypto) IntN(n int) int {
 	return int(c.Float64() * float64(n))
 }
 
-func (c *Crypto) IntRange(min, max int) int {
-	if max < min {
-		panic("random: IntRange requires max >= min")
+func (c *Crypto) IntRange(lo, hi int) int {
+	if hi < lo {
+		panic("random: IntRange requires hi >= lo")
 	}
-	return min + c.IntN(max-min+1)
+	return lo + c.IntN(hi-lo+1)
 }
 
 func (c *Crypto) Bytes(n int) ([]byte, error) {
@@ -87,8 +87,11 @@ type Seeded struct {
 	r *rand.Rand
 }
 
-// NewSeeded returns a Seeded source initialized with seed.
+// NewSeeded returns a Seeded source initialized with seed. Seeded uses
+// math/rand/v2 (PCG) — fast and reproducible for tests, NOT cryptographically
+// secure. Production code should use Crypto.
 func NewSeeded(seed uint64) *Seeded {
+	// #nosec G404 -- intentional non-crypto PRNG for deterministic test fixtures
 	return &Seeded{r: rand.New(rand.NewPCG(seed, seed^0x9E3779B97F4A7C15))}
 }
 
@@ -101,11 +104,11 @@ func (s *Seeded) IntN(n int) int {
 	return s.r.IntN(n)
 }
 
-func (s *Seeded) IntRange(min, max int) int {
-	if max < min {
-		panic("random: IntRange requires max >= min")
+func (s *Seeded) IntRange(lo, hi int) int {
+	if hi < lo {
+		panic("random: IntRange requires hi >= lo")
 	}
-	return min + s.r.IntN(max-min+1)
+	return lo + s.r.IntN(hi-lo+1)
 }
 
 func (s *Seeded) Bytes(n int) ([]byte, error) {
@@ -114,7 +117,7 @@ func (s *Seeded) Bytes(n int) ([]byte, error) {
 	}
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = byte(s.r.UintN(256))
+		b[i] = byte(s.r.UintN(256)) // #nosec G115 -- 0..255 fits in byte by construction
 	}
 	return b, nil
 }
@@ -122,7 +125,7 @@ func (s *Seeded) Bytes(n int) ([]byte, error) {
 func (s *Seeded) UUID() string {
 	var b [16]byte
 	for i := range b {
-		b[i] = byte(s.r.UintN(256))
+		b[i] = byte(s.r.UintN(256)) // #nosec G115 -- 0..255 fits in byte by construction
 	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
