@@ -36,6 +36,13 @@ const tabs = [
       </>
     ),
   },
+  {
+    to: '/admin',
+    label: 'Admin',
+    icon: (
+      <path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-4z" />
+    ),
+  },
 ]
 
 export function MobileBottomNav() {

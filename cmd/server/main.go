@@ -118,12 +118,19 @@ func buildRouter(pool *pgxpool.Pool, c cache.Cache) *mux.Router {
 
 	router.HandleFunc("/healthz", handlers.Health(pool)).Methods("GET")
 
+	traffic := middleware.NewTrafficRecorder()
+
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(middleware.Logging)
 	api.Use(middleware.Recover)
+	api.Use(traffic.Middleware)
 	api.Use(middleware.ContentType)
 	api.Use(middleware.Gzip)
 	api.HandleFunc("/users", handlers.GetUsers(db.New(pool), c)).Methods("GET")
+
+	admin := api.PathPrefix("/admin").Subrouter()
+	admin.HandleFunc("/traffic", handlers.AdminTraffic(traffic)).Methods("GET")
+	admin.HandleFunc("/healthchecks", handlers.AdminHealthchecks(pool, c)).Methods("GET")
 
 	router.HandleFunc("/ws", handlers.WebSocket())
 

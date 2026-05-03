@@ -49,6 +49,7 @@ export function Header() {
           <NavLink to="/tools" className={navLinkClass}>Tools</NavLink>
           <NavLink to="/search" className={navLinkClass}>Search</NavLink>
           <NavLink to="/profile" className={navLinkClass}>Profile</NavLink>
+          <NavLink to="/admin" className={navLinkClass}>Admin</NavLink>
           <Link
             to="/login"
             className="ml-2 px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"

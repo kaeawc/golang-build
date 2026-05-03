@@ -145,4 +145,3 @@ func (m model) View() string {
 	}
 	return m.phase.View()
 }
-

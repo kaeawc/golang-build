@@ -89,10 +89,14 @@ func TestLiveViewRendersSample(t *testing.T) {
 		return rendered
 	})
 
-	// Before any tick, view should show a placeholder.
+	// Before any tick, view should show a placeholder and the renderer
+	// should not yet have been invoked.
 	out := v.View()
-	if out == "" || rendered != "" {
-		// expected: rendered not yet populated
+	if out == "" {
+		t.Errorf("View returned empty before any tick")
+	}
+	if rendered != "" {
+		t.Errorf("renderer invoked before tick, rendered=%q", rendered)
 	}
 
 	next, _ := v.Update(liveTickMsg{tag: "eng"})

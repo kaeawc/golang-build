@@ -37,7 +37,7 @@ type FakeBackend struct {
 	Err    error // injected error for negative tests
 }
 
-func (f *FakeBackend) ListUsers(ctx context.Context) ([]User, error) {
+func (f *FakeBackend) ListUsers(_ context.Context) ([]User, error) {
 	if f.Err != nil {
 		return nil, f.Err
 	}
@@ -46,7 +46,7 @@ func (f *FakeBackend) ListUsers(ctx context.Context) ([]User, error) {
 	return out, nil
 }
 
-func (f *FakeBackend) RunHealthchecks(ctx context.Context) ([]Probe, error) {
+func (f *FakeBackend) RunHealthchecks(_ context.Context) ([]Probe, error) {
 	if f.Err != nil {
 		return nil, f.Err
 	}

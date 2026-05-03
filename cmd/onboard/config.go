@@ -122,7 +122,7 @@ func writeConfig(dir string, c Config) (string, error) {
 		return "", fmt.Errorf("target %q is not a directory", dir)
 	}
 	path := filepath.Join(abs, ".env")
-	if err := os.WriteFile(path, []byte(renderEnv(c)), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(renderEnv(c)), 0o600); err != nil {
 		return "", err
 	}
 	return path, nil
