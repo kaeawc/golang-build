@@ -14,13 +14,13 @@ afterEach(() => {
 })
 
 describe('App', () => {
-  test('renders heading', () => {
+  test('renders Feed heading', () => {
     globalThis.fetch = mock(() => Promise.resolve(new Response('[]'))) as unknown as typeof fetch
     render(<App />)
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('golang-build')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Feed')
   })
 
-  test('renders users from /api/users', async () => {
+  test('renders users from /api/users in sidebar', async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(JSON.stringify([{ id: 1, name: 'Ada' }]))),
     ) as unknown as typeof fetch

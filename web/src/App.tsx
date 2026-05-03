@@ -1,46 +1,30 @@
-import { useEffect, useState } from 'react'
-
-type User = { id: number; name: string }
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { Header } from './components/layout/Header'
+import { Footer } from './components/layout/Footer'
+import { MobileBottomNav } from './components/layout/MobileBottomNav'
+import { FeedPage } from './pages/FeedPage'
+import { ToolsPage } from './pages/ToolsPage'
+import { SearchPage } from './pages/SearchPage'
+import { LoginPage } from './pages/LoginPage'
+import { ProfilePage } from './pages/ProfilePage'
 
 export function App() {
-  const [users, setUsers] = useState<User[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const ac = new AbortController()
-    fetch('/api/users', { signal: ac.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json() as Promise<User[]>
-      })
-      .then(setUsers)
-      .catch((e: Error) => {
-        if (e.name !== 'AbortError') setError(e.message)
-      })
-    return () => ac.abort()
-  }, [])
-
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
-      <h1 className="text-3xl font-semibold tracking-tight">golang-build</h1>
-      <p className="mt-2 text-gray-600">React + Vite + Tailwind, served by the Go API.</p>
-
-      <section className="mt-8">
-        <h2 className="text-lg font-medium">Users</h2>
-        {error && <p className="mt-2 text-red-600">Error: {error}</p>}
-        {!users && !error && <p className="mt-2 text-gray-500">Loading…</p>}
-        {users && (
-          <ul className="mt-2 divide-y rounded border border-gray-200 bg-white">
-            {users.length === 0 && <li className="p-3 text-gray-500">No users yet.</li>}
-            {users.map((u) => (
-              <li key={u.id} className="p-3">
-                <span className="font-mono text-sm text-gray-500">#{u.id}</span>{' '}
-                <span>{u.name}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+    <BrowserRouter>
+      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 pb-14 md:pb-0">
+        <Header />
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+          <Routes>
+            <Route path="/" element={<FeedPage />} />
+            <Route path="/tools" element={<ToolsPage />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Routes>
+        </main>
+        <Footer />
+        <MobileBottomNav />
+      </div>
+    </BrowserRouter>
   )
 }
