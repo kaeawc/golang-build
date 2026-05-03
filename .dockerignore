@@ -1,5 +1,12 @@
 .git
+.github
+.claude
 node_modules
-Dockerfile
+**/node_modules
+.turbo
+**/.turbo
+web/dist
+*.tsbuildinfo
+docs
+ci/Dockerfile
 .dockerignore
-*.md

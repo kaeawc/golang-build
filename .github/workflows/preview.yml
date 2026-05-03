@@ -1,0 +1,152 @@
+name: "Preview"
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: preview-pr-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  preview:
+    name: "Preview deploy"
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, 'preview') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    env:
+      PR: ${{ github.event.issue.number }}
+      APP: golang-build-pr-${{ github.event.issue.number }}
+      BRANCH: preview-pr-${{ github.event.issue.number }}
+      PREVIEW_URL: https://golang-build-pr-${{ github.event.issue.number }}.fly.dev/
+      COMMENT_MARKER: "<!-- preview-bot -->"
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: "React to comment"
+        run: |
+          gh api -X POST "/repos/${GH_REPO}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content=rocket >/dev/null || true
+
+      - name: "Parse duration"
+        id: dur
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          # Accept: "preview", "preview 10m", "preview 1h", "preview 30s"
+          # Default: 5 minutes. Cap: 4 hours.
+          arg="$(printf '%s\n' "$BODY" | awk '{print tolower($2)}')"
+          if [ -z "$arg" ]; then
+            seconds=300
+            label="5m"
+          else
+            num="${arg%[smh]}"
+            unit="${arg##$num}"
+            case "$unit" in
+              s) seconds="$num" ;;
+              m|"") seconds=$(( num * 60 )) ;;
+              h) seconds=$(( num * 3600 )) ;;
+              *) echo "Unrecognized duration: $arg" >&2; exit 1 ;;
+            esac
+            if ! [ "$seconds" -gt 0 ] 2>/dev/null; then
+              echo "Invalid duration: $arg" >&2; exit 1
+            fi
+            if [ "$seconds" -gt 14400 ]; then seconds=14400; fi
+            label="$arg"
+          fi
+          echo "seconds=$seconds" >>"$GITHUB_OUTPUT"
+          echo "label=$label"     >>"$GITHUB_OUTPUT"
+          echo "Preview will run for $label ($seconds seconds)"
+
+      - name: "Checkout PR head"
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: "Install neonctl"
+        run: npm i -g neonctl@2
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: "Tear down other live previews"
+        run: |
+          # Destroy any Fly app whose name starts with golang-build-pr- and isn't ours,
+          # and delete its sticky PR comment. Policy: one preview at a time.
+          mapfile -t others < <(flyctl apps list --json | jq -r --arg us "$APP" \
+            '.[] | select(.Name | startswith("golang-build-pr-")) | select(.Name != $us) | .Name')
+          for name in "${others[@]}"; do
+            other_pr="${name#golang-build-pr-}"
+            echo "Tearing down $name (PR #$other_pr)"
+            scripts/preview-deploy.sh "$other_pr" down || true
+            cid="$(gh api "/repos/${GH_REPO}/issues/${other_pr}/comments" --paginate \
+              --jq '.[] | select(.body | startswith("'"$COMMENT_MARKER"'")) | .id' | head -n1)"
+            if [ -n "$cid" ]; then
+              gh api -X DELETE "/repos/${GH_REPO}/issues/comments/${cid}" >/dev/null || true
+            fi
+          done
+
+      - name: "Deploy preview"
+        run: scripts/preview-deploy.sh "$PR" up
+
+      - name: "Post/update sticky comment"
+        env:
+          DURATION_LABEL: ${{ steps.dur.outputs.label }}
+          DURATION_SECONDS: ${{ steps.dur.outputs.seconds }}
+        run: |
+          expires_at=$(date -u -d "+${DURATION_SECONDS} seconds" +"%Y-%m-%dT%H:%M:%SZ")
+          sha="$(git rev-parse --short HEAD)"
+          body=$(cat <<EOF
+          ${COMMENT_MARKER}
+          ### Preview deployed
+
+          - URL: ${PREVIEW_URL}
+          - Duration: ${DURATION_LABEL}
+          - Expires: ${expires_at}
+          - Commit: ${sha}
+
+          Comment \`preview\` again to refresh, or \`preview 1h\` to extend.
+          EOF
+          )
+          body=$(printf '%s\n' "$body" | sed 's/^          //')
+          existing="$(gh api "/repos/${GH_REPO}/issues/${PR}/comments" --paginate \
+            --jq '.[] | select(.body | startswith("'"$COMMENT_MARKER"'")) | .id' | head -n1)"
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "/repos/${GH_REPO}/issues/comments/${existing}" -f body="$body" >/dev/null
+          else
+            gh api -X POST "/repos/${GH_REPO}/issues/${PR}/comments" -f body="$body" >/dev/null
+          fi
+
+      - name: "Hold preview open"
+        run: sleep "${{ steps.dur.outputs.seconds }}"
+
+      - name: "Tear down preview (expired)"
+        if: success()
+        run: |
+          scripts/preview-deploy.sh "$PR" down || true
+          cid="$(gh api "/repos/${GH_REPO}/issues/${PR}/comments" --paginate \
+            --jq '.[] | select(.body | startswith("'"$COMMENT_MARKER"'")) | .id' | head -n1)"
+          if [ -n "$cid" ]; then
+            gh api -X DELETE "/repos/${GH_REPO}/issues/comments/${cid}" >/dev/null || true
+          fi
+
+      - name: "Tear down preview (cancelled by same-PR retrigger)"
+        if: cancelled()
+        run: |
+          # A same-PR "preview" comment cancelled us. Tear down Fly/Neon resources
+          # so the incoming run gets a clean slate. Leave the sticky comment; the
+          # new run will update it in place.
+          scripts/preview-deploy.sh "$PR" down || true

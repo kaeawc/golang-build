@@ -30,3 +30,9 @@ go.work.sum
 # binary output
 main
 .claude/
+
+# node / bun / turbo
+node_modules/
+.turbo/
+web/dist/
+*.tsbuildinfo
