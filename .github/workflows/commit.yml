@@ -7,10 +7,11 @@ on:
   pull_request:
     branches:
       - '*'
+  workflow_call:
 
 permissions:
   checks: write
-  packages:	write
+  packages: write
 
 jobs:
   compile-binary:

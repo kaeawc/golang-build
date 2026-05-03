@@ -1,0 +1,47 @@
+name: "Deploy"
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  checks: write
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/commit.yml
+
+  deploy:
+    name: "Fly deploy (production)"
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: "flyctl deploy"
+        run: flyctl deploy --remote-only --strategy rolling
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: "Smoke test /healthz"
+        run: |
+          set -eu
+          url="${SMOKE_URL:-https://golang-build.fly.dev/healthz}"
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i: curl $url"
+            if curl -fsS "$url"; then
+              echo "healthz OK"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "healthz failed after 5 attempts"
+          exit 1
