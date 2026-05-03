@@ -7,6 +7,7 @@ Experimental Go build tooling, references, and CI pipeline.
 - `cmd/onboard` — interactive TUI wizard that generates a `.env` for the server.
 - `cmd/loadgen` — TUI HTTP load generator with a live-updating dashboard.
 - `cmd/scaffold` — TUI code generator: pick handler/middleware/package + name → write boilerplate file.
+- `cmd/admin` — TUI for inspecting a deployment: list users, run healthchecks. Falls back to a fake backend when DATABASE_URL is unset.
 
 ## TUI scaffolding
 
