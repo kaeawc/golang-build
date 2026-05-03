@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
+	// pgx/v5 driver registers itself in init for migrate.New("pgx5://...").
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	// file source driver registers itself in init for "file://..." source URLs.
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
