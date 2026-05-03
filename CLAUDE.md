@@ -43,6 +43,7 @@ docker build -f ci/Dockerfile -t golang-build:latest .
 - **`cmd/onboard/`** — TUI wizard that walks the user through generating a `.env` for the server. Demonstrates the `internal/tui` framework.
 - **`cmd/loadgen/`** — TUI HTTP load generator with a live-updating dashboard. Demonstrates the `LiveView` phase.
 - **`cmd/scaffold/`** — TUI code generator. Demonstrates the `TextInput` phase with inline validation.
+- **`cmd/admin/`** — TUI deployment inspector. Demonstrates the dynamic Picker pattern (Picker fed by an AsyncTask result). Has a `Backend` interface with both a live (pgxpool + valkey) and a fake implementation.
 - **`internal/handlers/`** — Route handlers. Handlers return `http.HandlerFunc` closures.
 - **`internal/middleware/`** — HTTP middleware (logging, panic recovery, content-type detection). Each middleware is a `func(http.Handler) http.Handler` applied via `router.Use()`.
 - **`internal/tui/`** — Reusable TUI scaffolding built on bubbletea/lipgloss. Exports a `Phase` interface and reusable phases (`Picker`, `Confirm`, `TextInput`, `AsyncTask`, `LiveView`, `Done`); callers assemble them into a root `tea.Model`. See `cmd/onboard/model.go`, `cmd/loadgen/model.go`, and `cmd/scaffold/model.go` for examples.
