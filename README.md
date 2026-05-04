@@ -10,6 +10,7 @@ Experimental Go build tooling, references, and CI pipeline.
 - `cmd/admin` — TUI for inspecting a deployment: list users, run healthchecks. Falls back to a fake backend when DATABASE_URL is unset.
 - `cmd/devup` — TUI wrapper around `docker compose`: pick service, pick action, view output. Demonstrates subprocess management via `internal/proc`.
 - `cmd/migrate` — TUI for inspecting and applying schema migrations. Composes `AsyncTask`/`Picker`/`Confirm`/`Done` against a `Migrator` interface; falls back to a `FakeMigrator` with `--fake` for demos / CI without a database.
+- `cmd/inspect` — TUI demo that wires `internal/eventbus` into the `LiveView` phase: pick a scenario, watch synthetic events flow with live counters, level breakdown, and a rolling tail of the most recent events.
 
 ## TUI scaffolding
 
