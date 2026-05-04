@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/kaeawc/golang-build/internal/proc"
 	"github.com/kaeawc/golang-build/internal/tui"
 )
 
@@ -21,7 +22,7 @@ const (
 var composeActions = []string{"ps", "up", "stop", "restart", "logs"}
 
 type model struct {
-	runner   Runner
+	runner   proc.Runner
 	services []string
 	service  string
 	action   string
@@ -30,7 +31,7 @@ type model struct {
 	err      error
 }
 
-func newModel(runner Runner) model {
+func newModel(runner proc.Runner) model {
 	m := model{runner: runner}
 	m.phase = m.loadServicesPhase()
 	return m

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/kaeawc/golang-build/internal/proc"
 	"github.com/kaeawc/golang-build/internal/tui"
 )
 
@@ -26,7 +27,7 @@ func run(args []string) int {
 		return 2
 	}
 
-	runner := ExecRunner{}
+	var runner proc.Runner = proc.OS{}
 
 	if *listOnly {
 		return runHeadlessList(os.Stdout, runner)
@@ -37,7 +38,7 @@ func run(args []string) int {
 	return runInteractive(runner)
 }
 
-func runInteractive(runner Runner) int {
+func runInteractive(runner proc.Runner) int {
 	final, err := tui.Run(newModel(runner))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -50,7 +51,7 @@ func runInteractive(runner Runner) int {
 	return 0
 }
 
-func runHeadlessList(out io.Writer, runner Runner) int {
+func runHeadlessList(out io.Writer, runner proc.Runner) int {
 	services, err := listComposeServices(context.Background(), runner)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -62,7 +63,7 @@ func runHeadlessList(out io.Writer, runner Runner) int {
 	return 0
 }
 
-func runHeadlessAction(out io.Writer, runner Runner, action, service string) int {
+func runHeadlessAction(out io.Writer, runner proc.Runner, action, service string) int {
 	if !validAction(action) {
 		fmt.Fprintf(os.Stderr, "error: invalid action %q (valid: ps, up, stop, restart, logs)\n", action)
 		return 2
