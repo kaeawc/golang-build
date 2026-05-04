@@ -19,6 +19,9 @@ build-scaffold:
 build-admin:
 	go build -ldflags "$(LDFLAGS)" -o admin ./cmd/admin/
 
+build-devup:
+	go build -ldflags "$(LDFLAGS)" -o devup ./cmd/devup/
+
 test:
 	go test ./... -count=1
 
@@ -52,6 +55,6 @@ validate-workflows:
 	bash scripts/validate-workflows.sh
 
 clean:
-	rm -f $(BIN) onboard loadgen scaffold admin junit-report.xml gosec-report.xml
+	rm -f $(BIN) onboard loadgen scaffold admin devup junit-report.xml gosec-report.xml
 
 all: build vet test
