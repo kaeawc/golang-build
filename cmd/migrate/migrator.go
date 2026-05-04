@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -162,6 +163,9 @@ func scanMigrations(dir string) ([]Migration, error) {
 		v, err := strconv.ParseUint(match[1], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("parse version in %q: %w", e.Name(), err)
+		}
+		if v > math.MaxUint32 {
+			return nil, fmt.Errorf("version %d in %q exceeds uint32 range", v, e.Name())
 		}
 		out = append(out, Migration{
 			Version: uint(v),
