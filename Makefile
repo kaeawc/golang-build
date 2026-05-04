@@ -25,6 +25,9 @@ build-devup:
 build-migrate-tui:
 	go build -ldflags "$(LDFLAGS)" -o migrate-tui ./cmd/migrate/
 
+build-inspect:
+	go build -ldflags "$(LDFLAGS)" -o inspect ./cmd/inspect/
+
 test:
 	go test ./... -count=1
 
@@ -58,6 +61,6 @@ validate-workflows:
 	bash scripts/validate-workflows.sh
 
 clean:
-	rm -f $(BIN) onboard loadgen scaffold admin devup migrate-tui junit-report.xml gosec-report.xml
+	rm -f $(BIN) onboard loadgen scaffold admin devup migrate-tui inspect junit-report.xml gosec-report.xml
 
 all: build vet test
