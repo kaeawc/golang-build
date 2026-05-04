@@ -8,7 +8,8 @@ Experimental Go build tooling, references, and CI pipeline.
 - `cmd/loadgen` — TUI HTTP load generator with a live-updating dashboard.
 - `cmd/scaffold` — TUI code generator: pick handler/middleware/package + name → write boilerplate file.
 - `cmd/admin` — TUI for inspecting a deployment: list users, run healthchecks. Falls back to a fake backend when DATABASE_URL is unset.
-- `cmd/devup` — TUI wrapper around `docker compose`: pick service, pick action, view output. Demonstrates subprocess management abstracted via a `Runner` interface.
+- `cmd/devup` — TUI wrapper around `docker compose`: pick service, pick action, view output. Demonstrates subprocess management via `internal/proc`.
+- `cmd/migrate` — TUI for inspecting and applying schema migrations. Composes `AsyncTask`/`Picker`/`Confirm`/`Done` against a `Migrator` interface; falls back to a `FakeMigrator` with `--fake` for demos / CI without a database.
 
 ## TUI scaffolding
 
