@@ -80,7 +80,7 @@ func (l *LiveMigrator) open() (*migrate.Migrate, error) {
 	return m, nil
 }
 
-func (l *LiveMigrator) Status(ctx context.Context) (Status, error) {
+func (l *LiveMigrator) Status(_ context.Context) (Status, error) {
 	files, err := scanMigrations(l.sourceDir)
 	if err != nil {
 		return Status{}, err
@@ -102,7 +102,7 @@ func (l *LiveMigrator) Status(ctx context.Context) (Status, error) {
 	}, nil
 }
 
-func (l *LiveMigrator) UpAll(ctx context.Context) error {
+func (l *LiveMigrator) UpAll(_ context.Context) error {
 	m, err := l.open()
 	if err != nil {
 		return err
@@ -114,7 +114,7 @@ func (l *LiveMigrator) UpAll(ctx context.Context) error {
 	return nil
 }
 
-func (l *LiveMigrator) UpOne(ctx context.Context) error {
+func (l *LiveMigrator) UpOne(_ context.Context) error {
 	m, err := l.open()
 	if err != nil {
 		return err
@@ -126,7 +126,7 @@ func (l *LiveMigrator) UpOne(ctx context.Context) error {
 	return nil
 }
 
-func (l *LiveMigrator) DownOne(ctx context.Context) error {
+func (l *LiveMigrator) DownOne(_ context.Context) error {
 	m, err := l.open()
 	if err != nil {
 		return err

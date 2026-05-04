@@ -195,25 +195,39 @@ func (m model) runPhase(a action) tui.Phase {
 	prior := m.status.CurrentVersion
 	return tui.NewAsyncTask(tagRunMig, "migrate — running", "applying migration...",
 		func() (any, error) {
-			ctx := context.Background()
-			var err error
-			switch a {
-			case actUpAll:
-				err = mig.UpAll(ctx)
-			case actUpOne:
-				err = mig.UpOne(ctx)
-			case actDownOne:
-				err = mig.DownOne(ctx)
-			}
-			if err != nil {
-				return runResult{action: a, priorVer: prior, err: err}, nil
-			}
-			st, sErr := mig.Status(ctx)
-			if sErr != nil {
-				return runResult{action: a, priorVer: prior, err: sErr}, nil
-			}
-			return runResult{action: a, priorVer: prior, newVer: st.CurrentVersion}, nil
+			return runMigration(mig, a, prior), nil
 		})
+}
+
+// runMigration applies the action and returns a runResult that
+// captures either success (with the new version) or the migration's
+// own error. It deliberately surfaces migration failures via
+// runResult.err rather than the AsyncTask's error channel: a failed
+// "down-one" should land on the Done phase with an explanation, not
+// quit the program.
+func runMigration(mig Migrator, a action, prior uint) runResult {
+	ctx := context.Background()
+	res := runResult{action: a, priorVer: prior}
+	var err error
+	switch a {
+	case actUpAll:
+		err = mig.UpAll(ctx)
+	case actUpOne:
+		err = mig.UpOne(ctx)
+	case actDownOne:
+		err = mig.DownOne(ctx)
+	}
+	if err != nil {
+		res.err = err
+		return res
+	}
+	st, sErr := mig.Status(ctx)
+	if sErr != nil {
+		res.err = sErr
+		return res
+	}
+	res.newVer = st.CurrentVersion
+	return res
 }
 
 func (m model) donePhase(res runResult) tui.Phase {
