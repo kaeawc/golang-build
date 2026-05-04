@@ -18,7 +18,7 @@ COPY sql ./sql
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server
 
 # Stage 3: runtime. Alpine (not scratch) for ca-certificates so pgx can TLS to Neon.
-FROM alpine:3.21
+FROM alpine:3.23
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=backend  /out/server         /app/server
