@@ -69,11 +69,11 @@ jobs:
           echo "Preview will run for $label ($seconds seconds)"
 
       - name: "Checkout PR head"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/pull/${{ github.event.issue.number }}/head
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
