@@ -10,8 +10,8 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/riverqueue/river v0.35.1
-	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.35.1
+	github.com/riverqueue/river v0.36.0
+	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.36.0
 	github.com/valkey-io/valkey-go v1.0.74
 )
 
@@ -36,9 +36,9 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/riverqueue/river/riverdriver v0.35.1 // indirect
-	github.com/riverqueue/river/rivershared v0.35.1 // indirect
-	github.com/riverqueue/river/rivertype v0.35.1 // indirect
+	github.com/riverqueue/river/riverdriver v0.36.0 // indirect
+	github.com/riverqueue/river/rivershared v0.36.0 // indirect
+	github.com/riverqueue/river/rivertype v0.36.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
