@@ -8,7 +8,7 @@ COPY web ./web
 RUN cd web && bun run build
 
 # Stage 2: build the Go binary.
-FROM golang:1.26-alpine AS backend
+FROM golang:1.27-alpine AS backend
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -18,7 +18,7 @@ COPY sql ./sql
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server
 
 # Stage 3: runtime. Alpine (not scratch) for ca-certificates so pgx can TLS to Neon.
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=backend  /out/server         /app/server
