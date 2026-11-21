@@ -88,7 +88,7 @@ client over `mcp.NewInMemoryTransports`.
 | Cancellation | Utilities › Cancellation | `export_users` honours `ctx`; HTTP `PropagateRequestCancellation` | `TestExportCancellation` (synctest) |
 | Pagination | Utilities › Pagination | `ServerOptions.PageSize` (default 5); `list_users` cursors | `TestToolListing`, `TestListUsersPagination` |
 | Cacheable list results (`ttlMs`, `cacheScope`) | SEP-2549 | `server.go` `setCacheable` | `TestCacheableResults`, `TestClientHonoursListTTL` (synctest), `TestHTTPRawProtocol` |
-| Logging middleware | n/a (server-side observability) | `middleware.go` `LoggingMiddleware` (method, duration, protocol, session, tool, isError, err) | `TestLoggingMiddleware`, `TestUnknownToolIsProtocolError` |
+| Logging middleware | n/a (server-side observability) | `middleware.go` `LoggingMiddleware` (method, duration, protocol, session, tool, is_error, err) | `TestLoggingMiddleware`, `TestUnknownToolIsProtocolError` |
 | Authorization (bearer) | Basic › Authorization (OAuth 2.1 resource server) | `auth.go` `TokenVerifier` (internal/tokens HS256, audience-bound, `UserID`=sub) + `auth.RequireBearerToken`; per-tool `users:write` scope | `TestHTTPAuth`, `TestRequireScope` |
 | Protected Resource Metadata | RFC 9728 | `auth.ProtectedResourceMetadataHandler` at `/.well-known/oauth-protected-resource[/mcp]`, `WWW-Authenticate resource_metadata=` | `TestHTTPAuth` |
 | Capabilities | Lifecycle › Capabilities | explicit `ServerOptions.Capabilities` (tools/prompts/resources listChanged + subscribe, completions; **no logging**) | `TestDiscoveryAndLifecycle` |

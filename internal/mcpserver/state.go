@@ -47,12 +47,10 @@ func newStateSigner(iv tokens.IssuerVerifier, clk clock.Clock) *stateSigner {
 func (s *stateSigner) issue(tool, target string) (string, error) {
 	now := s.clk.Now()
 	tok, err := s.tokens.Sign(stateClaims{
-		StandardClaims: tokens.StandardClaims{
-			IssuedAt:  now.Unix(),
-			ExpiresAt: now.Add(requestStateTTL).Unix(),
-		},
-		Tool:   tool,
-		Target: target,
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(requestStateTTL).Unix(),
+		Tool:      tool,
+		Target:    target,
 	})
 	if err != nil {
 		return "", fmt.Errorf("sign requestState: %w", err)

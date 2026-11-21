@@ -64,13 +64,11 @@ func TokenVerifier(v tokens.Verifier, audience string) auth.TokenVerifier {
 func MintToken(is tokens.Issuer, clk clock.Clock, subject, audience string, scopes []string, ttl time.Duration) (string, error) {
 	now := clk.Now()
 	return is.Sign(AccessClaims{
-		StandardClaims: tokens.StandardClaims{
-			Subject:   subject,
-			Audience:  audience,
-			IssuedAt:  now.Unix(),
-			ExpiresAt: now.Add(ttl).Unix(),
-		},
-		Scope: strings.Join(scopes, " "),
+		Subject:   subject,
+		Audience:  audience,
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(ttl).Unix(),
+		Scope:     strings.Join(scopes, " "),
 	})
 }
 

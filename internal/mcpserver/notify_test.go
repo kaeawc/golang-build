@@ -210,7 +210,7 @@ func TestExportCancellation(t *testing.T) {
 				if n := notes.Load(); n != 1 {
 					t.Errorf("received %d progress notifications after cancel, want 1", n)
 				}
-				if logs := h.logs.String(); !strings.Contains(logs, "tool=export_users isError=true") {
+				if logs := h.logs.String(); !strings.Contains(logs, "tool=export_users is_error=true") {
 					t.Errorf("server handler did not stop with an error:\n%s", logs)
 				}
 			})

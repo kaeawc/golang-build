@@ -251,7 +251,7 @@ func TestLoggingMiddleware(t *testing.T) {
 	h := newHarness(t, latest, nil)
 	h.call(t, ToolGetUser, map[string]any{"id": 1})
 	logs := h.logs.String()
-	for _, want := range []string{"msg=\"mcp request\"", "method=tools/call", "tool=get_user", "isError=false", "duration=", "protocol=2026-07-28"} {
+	for _, want := range []string{"msg=\"mcp request\"", "method=tools/call", "tool=get_user", "is_error=false", "duration=", "protocol=2026-07-28"} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("logs missing %q:\n%s", want, logs)
 		}

@@ -47,9 +47,9 @@ func callAttrs(req mcp.Request, res mcp.Result) []slog.Attr {
 		attrs = append(attrs, slog.String("tool", ct.Params.Name))
 	}
 	if r, ok := res.(*mcp.CallToolResult); ok && r != nil {
-		attrs = append(attrs, slog.Bool("isError", r.IsError))
+		attrs = append(attrs, slog.Bool("is_error", r.IsError))
 		if len(r.InputRequests) > 0 {
-			attrs = append(attrs, slog.Int("inputRequests", len(r.InputRequests)))
+			attrs = append(attrs, slog.Int("input_requests", len(r.InputRequests)))
 		}
 	}
 	return attrs
