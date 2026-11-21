@@ -50,8 +50,13 @@ jobs:
             seconds=300
             label="5m"
           else
+            # $arg comes from a PR comment: validate it before it reaches
+            # pattern matching or arithmetic expansion.
+            if ! printf '%s' "$arg" | grep -Eq '^[0-9]{1,6}[smh]?$'; then
+              echo "Unrecognized duration: $arg" >&2; exit 1
+            fi
             num="${arg%[smh]}"
-            unit="${arg##$num}"
+            unit="${arg##"$num"}"
             case "$unit" in
               s) seconds="$num" ;;
               m|"") seconds=$(( num * 60 )) ;;
