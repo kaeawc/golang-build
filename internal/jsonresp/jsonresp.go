@@ -222,12 +222,10 @@ func (e *DecodeError) Error() string { return e.msg }
 func (e *DecodeError) Unwrap() error { return e.err }
 
 func classifyDecodeError(err error, cfg decodeCfg) *DecodeError {
-	var syntaxErr *json.SyntaxError
-	if errors.As(err, &syntaxErr) {
+	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
 		return &DecodeError{Kind: DecodeKindMalformed, msg: "malformed JSON: " + err.Error(), err: err}
 	}
-	var unmarshalErr *json.UnmarshalTypeError
-	if errors.As(err, &unmarshalErr) {
+	if unmarshalErr, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
 		return &DecodeError{
 			Kind: DecodeKindWrongType,
 			msg:  fmt.Sprintf("wrong type for field %q: expected %s", unmarshalErr.Field, unmarshalErr.Type),
@@ -241,8 +239,7 @@ func classifyDecodeError(err error, cfg decodeCfg) *DecodeError {
 		}
 		return &DecodeError{Kind: kind, msg: "incomplete JSON body", err: err}
 	}
-	var maxBytesErr *http.MaxBytesError
-	if errors.As(err, &maxBytesErr) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		return &DecodeError{Kind: DecodeKindTooLarge, msg: err.Error(), err: err}
 	}
 	// json.Decoder reports unknown fields with a stable prefix; there is no

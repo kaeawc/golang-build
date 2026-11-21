@@ -89,16 +89,16 @@ func TestFake_ConcurrentAccess(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 2)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				f.Advance(time.Nanosecond)
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				_ = f.Now()
 			}
 		}()

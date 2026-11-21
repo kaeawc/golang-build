@@ -116,7 +116,7 @@ func TestCaptureReset(t *testing.T) {
 func TestCaptureConcurrent(t *testing.T) {
 	c := NewCapture(slog.LevelDebug)
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

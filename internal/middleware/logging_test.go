@@ -11,7 +11,7 @@ func TestLoggingMiddleware(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req, err := http.NewRequest("GET", "/", nil)
+	req, err := http.NewRequest(http.MethodGet, "/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

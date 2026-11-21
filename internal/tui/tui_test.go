@@ -33,7 +33,7 @@ func TestPickerArrowSelectsItem(t *testing.T) {
 
 func TestPickerCannotMovePastEdges(t *testing.T) {
 	p := NewPicker("t", "pick", nil, []PickerItem{{Label: "x"}, {Label: "y"}})
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		next, _ := p.Update(tea.KeyMsg{Type: tea.KeyUp})
 		p = next.(Picker)
 	}

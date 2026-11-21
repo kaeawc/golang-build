@@ -43,7 +43,7 @@ func TestShutdownIsIdempotent(t *testing.T) {
 		return nil
 	})
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := c.Shutdown(context.Background()); err != nil {
 			t.Fatalf("Shutdown #%d: %v", i, err)
 		}

@@ -76,7 +76,7 @@ func (v LiveView) Update(msg tea.Msg) (Phase, tea.Cmd) {
 }
 
 func (v LiveView) View() string {
-	body := ""
+	var body string
 	if v.last != nil {
 		body = v.render(v.last)
 	} else {

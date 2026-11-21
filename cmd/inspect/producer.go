@@ -77,7 +77,7 @@ func runBursty(ctx context.Context, bus *eventbus.Async[Event]) {
 	burst := 0
 	emit := func() {
 		burst++
-		for j := 0; j < 50; j++ {
+		for j := range 50 {
 			select {
 			case <-ctx.Done():
 				return

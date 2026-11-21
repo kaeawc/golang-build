@@ -42,7 +42,7 @@ func NewAsyncWriter(workers, queueSize int) *AsyncWriter {
 		queueSize = 1
 	}
 	w := &AsyncWriter{jobs: make(chan func() (int64, error), queueSize)}
-	for i := 0; i < workers; i++ {
+	for range workers {
 		w.workersWG.Add(1)
 		go w.run()
 	}

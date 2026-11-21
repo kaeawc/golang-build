@@ -81,8 +81,7 @@ func (OS) Run(ctx context.Context, cmd Cmd) (Result, error) {
 		res.ExitCode = -1
 	}
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
 			// A non-zero exit is reflected in ExitCode; not an
 			// error from the runner's perspective.
 			return res, nil

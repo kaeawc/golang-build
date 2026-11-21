@@ -13,7 +13,7 @@ import (
 func TestBucketBurstAllowedImmediately(t *testing.T) {
 	clk := clock.NewFake(time.Unix(0, 0))
 	b := New(clk, 10, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !b.Allow() {
 			t.Fatalf("Allow #%d: want true (within burst)", i)
 		}
@@ -26,7 +26,7 @@ func TestBucketBurstAllowedImmediately(t *testing.T) {
 func TestBucketRefillByTime(t *testing.T) {
 	clk := clock.NewFake(time.Unix(0, 0))
 	b := New(clk, 10, 5)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		b.Allow()
 	}
 	if b.Allow() {
@@ -196,16 +196,14 @@ func TestManualConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	allowed := 0
 	var amu sync.Mutex
-	for i := 0; i < 200; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 200 {
+		wg.Go(func() {
 			if m.Allow() {
 				amu.Lock()
 				allowed++
 				amu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if allowed != 100 {

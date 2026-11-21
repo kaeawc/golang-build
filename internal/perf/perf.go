@@ -1,6 +1,7 @@
 package perf
 
 import (
+	"maps"
 	"sync"
 	"time"
 
@@ -182,9 +183,7 @@ func cloneMetrics(metrics map[string]int64) map[string]int64 {
 		return nil
 	}
 	out := make(map[string]int64, len(metrics))
-	for k, v := range metrics {
-		out[k] = v
-	}
+	maps.Copy(out, metrics)
 	return out
 }
 
@@ -193,9 +192,7 @@ func cloneAttributes(attrs map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(attrs))
-	for k, v := range attrs {
-		out[k] = v
-	}
+	maps.Copy(out, attrs)
 	return out
 }
 

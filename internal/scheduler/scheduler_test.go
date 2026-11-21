@@ -89,7 +89,7 @@ func TestPeriodicSchedulesNextRun(t *testing.T) {
 		Func:     func(context.Context) error { fired.Add(1); return nil },
 	})
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		clk.Advance(50 * time.Millisecond)
 		s.RunDue(context.Background())
 		// Wait for the goroutine to finish before next advance so the
@@ -224,7 +224,7 @@ func TestConcurrencyLimit(t *testing.T) {
 
 	gate := make(chan struct{})
 	var fired atomic.Int32
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		name := string(rune('a' + i))
 		_ = s.Schedule(Job{
 			Name:     name,
@@ -392,7 +392,7 @@ func TestConcurrentScheduleAndRunDue(t *testing.T) {
 	s := New(clk)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(2)
 		go func(i int) {
 			defer wg.Done()

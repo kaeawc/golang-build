@@ -108,7 +108,7 @@ func TestAsyncDeliversEventually(t *testing.T) {
 	var got atomic.Int32
 	bus.Subscribe(func(int) { got.Add(1) })
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		bus.Publish(i)
 	}
 
@@ -129,7 +129,7 @@ func TestAsyncDropWhenFull(t *testing.T) {
 	hold := make(chan struct{})
 	bus.Subscribe(func(int) { <-hold })
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		bus.Publish(i)
 	}
 
@@ -149,7 +149,7 @@ func TestAsyncSlowSubscriberDoesNotBlockOthers(t *testing.T) {
 	var fastGot atomic.Int32
 	bus.Subscribe(func(int) { fastGot.Add(1) })
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		bus.Publish(i)
 	}
 
@@ -175,7 +175,7 @@ func TestAsyncCloseDrainsQueue(t *testing.T) {
 		got.Add(1)
 	})
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		bus.Publish(i)
 	}
 	bus.Close()
@@ -223,7 +223,7 @@ func TestAsyncConcurrentPublish(t *testing.T) {
 	bus.Subscribe(func(int) { got.Add(1) })
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

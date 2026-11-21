@@ -16,7 +16,7 @@ func TestRealDoesGetAndReadsBody(t *testing.T) {
 			t.Errorf("server saw method %q", r.Method)
 		}
 		w.Header().Set("X-Test", "yes")
-		w.WriteHeader(202)
+		w.WriteHeader(http.StatusAccepted)
 		_, _ = io.WriteString(w, "hello")
 	}))
 	defer srv.Close()

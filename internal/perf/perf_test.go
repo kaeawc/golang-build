@@ -168,7 +168,7 @@ func TestTracker_MultipleTrackCalls(t *testing.T) {
 func TestTracker_GetTimingsOrder(t *testing.T) {
 	tracker := New(true)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		name := []string{"a", "b", "c", "d", "e"}[i]
 		_ = tracker.Track(name, func() error { return nil })
 	}
@@ -289,7 +289,7 @@ func TestTracker_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(_ int) {
 			defer wg.Done()
 			name := "goroutine"
@@ -315,7 +315,7 @@ func TestTracker_ConcurrentSerialEnd(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			child := tracker.Serial("concurrent-child")
