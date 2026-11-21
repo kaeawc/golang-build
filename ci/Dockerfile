@@ -8,7 +8,7 @@ COPY web ./web
 RUN cd web && bun run build
 
 # Stage 2: build the Go binary.
-FROM golang:1.26-alpine AS backend
+FROM golang:1.27-alpine AS backend
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
