@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 type fakeSampler struct {
@@ -155,5 +155,5 @@ func TestLiveViewCarriesLastBetweenTicks(t *testing.T) {
 	if got != 2 {
 		t.Errorf("expected last=2 after two ticks, got %d", got)
 	}
-	_ = tea.KeyMsg{} // keep tea import non-unused if tests are trimmed
+	_ = tea.KeyPressMsg{} // keep tea import non-unused if tests are trimmed
 }

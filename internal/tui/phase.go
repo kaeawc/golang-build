@@ -1,6 +1,6 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 // Phase is the contract a wizard step implements. The root tea.Model
 // supplied by the caller delegates Update and View to the active phase
@@ -21,7 +21,7 @@ type PhaseIniter interface {
 // hit that the framework owns (ctrl+c, q to quit). Root models should
 // call this first and short-circuit when it returns non-nil.
 func HandleGlobal(msg tea.Msg) tea.Cmd {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil
 	}

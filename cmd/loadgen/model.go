@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kaeawc/golang-build/internal/tui"
 )
@@ -139,9 +139,9 @@ func (m model) onDashboardDone(msg tui.LiveDoneMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
 	if m.err != nil {
-		return tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n"
+		return tea.NewView(tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n")
 	}
-	return m.phase.View()
+	return tea.NewView(m.phase.View())
 }

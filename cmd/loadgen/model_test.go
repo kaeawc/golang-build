@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kaeawc/golang-build/internal/tui"
 )
@@ -67,7 +67,7 @@ func TestModelGlobalQuitCancelsEngine(t *testing.T) {
 	m = step(t, m, tui.PickerDoneMsg{Tag: tagPickDuration, Index: 2}) // 30s
 
 	// Send 'q'. The model should call cancel and emit tea.Quit.
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if cmd == nil {
 		t.Fatalf("expected quit cmd")
 	}

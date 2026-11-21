@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestTextInputRejectsEmpty(t *testing.T) {
 	ti := NewTextInput("name", "title", "prompt", "placeholder", nil)
-	next, cmd := ti.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, cmd := ti.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd != nil {
 		t.Errorf("expected no completion cmd for empty input")
 	}
@@ -23,7 +23,7 @@ func TestTextInputAcceptsValidValue(t *testing.T) {
 	ti := NewTextInput("name", "title", "prompt", "placeholder", nil)
 	// Type "foo" then enter.
 	cur := typeText(ti, "foo")
-	_, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := cur.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatalf("expected completion cmd")
 	}
@@ -38,7 +38,7 @@ func TestTextInputValidationFailure(t *testing.T) {
 		return errors.New("must start with x")
 	})
 	cur := typeText(ti, "yfoo")
-	next, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, cmd := cur.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd != nil {
 		t.Errorf("expected no completion cmd on validation failure")
 	}
@@ -57,7 +57,7 @@ func TestTextInputValidationSuccess(t *testing.T) {
 		return nil
 	})
 	cur := typeText(ti, "ok")
-	_, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := cur.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !called {
 		t.Errorf("validate was not called")
 	}
@@ -69,13 +69,13 @@ func TestTextInputValidationSuccess(t *testing.T) {
 func TestTextInputErrorClearedOnKeystroke(t *testing.T) {
 	ti := NewTextInput("name", "t", "p", "ph", nil)
 	// Trigger error.
-	next, _ := ti.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, _ := ti.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	cur := next.(TextInput)
 	if cur.errMsg == "" {
 		t.Fatalf("expected errMsg set")
 	}
 	// Any keystroke clears it.
-	next2, _ := cur.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	next2, _ := cur.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
 	if next2.(TextInput).errMsg != "" {
 		t.Errorf("errMsg should clear on keystroke")
 	}
@@ -84,7 +84,7 @@ func TestTextInputErrorClearedOnKeystroke(t *testing.T) {
 func TestTextInputTrimsWhitespace(t *testing.T) {
 	ti := NewTextInput("name", "t", "p", "ph", nil)
 	cur := typeText(ti, "  foo  ")
-	_, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := cur.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatalf("expected cmd")
 	}
@@ -97,7 +97,7 @@ func TestTextInputTrimsWhitespace(t *testing.T) {
 func typeText(ti TextInput, s string) TextInput {
 	cur := ti
 	for _, r := range s {
-		next, _ := cur.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		next, _ := cur.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		cur = next.(TextInput)
 	}
 	return cur

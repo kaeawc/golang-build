@@ -6,15 +6,15 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestPickerArrowSelectsItem(t *testing.T) {
 	p := NewPicker("preset", "pick", nil, []PickerItem{
 		{Label: "a"}, {Label: "b"}, {Label: "c"},
 	})
-	p2, _ := p.Update(tea.KeyMsg{Type: tea.KeyDown})
-	p3, cmd := p2.(Picker).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	p2, _ := p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	p3, cmd := p2.(Picker).Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if _, ok := p3.(Picker); !ok {
 		t.Fatalf("phase should remain a Picker until cmd is consumed")
 	}
@@ -34,11 +34,11 @@ func TestPickerArrowSelectsItem(t *testing.T) {
 func TestPickerCannotMovePastEdges(t *testing.T) {
 	p := NewPicker("t", "pick", nil, []PickerItem{{Label: "x"}, {Label: "y"}})
 	for i := 0; i < 5; i++ {
-		next, _ := p.Update(tea.KeyMsg{Type: tea.KeyUp})
+		next, _ := p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 		p = next.(Picker)
 	}
 	// Should be at index 0; selecting yields x.
-	_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	got := cmd().(PickerDoneMsg)
 	if got.Index != 0 || got.Item.Label != "x" {
 		t.Errorf("expected first item, got %+v", got)
@@ -48,17 +48,65 @@ func TestPickerCannotMovePastEdges(t *testing.T) {
 func TestConfirmDefaultAndOverride(t *testing.T) {
 	c := NewConfirm("ws", "title", "desc", true)
 	// Default is yes; pressing enter immediately confirms yes.
-	_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := c.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := cmd().(ConfirmDoneMsg); !got.Yes || got.Tag != "ws" {
 		t.Errorf("expected yes, got %+v", got)
 	}
 
 	// Now pick "no" by typing 'n' then enter.
 	c2 := NewConfirm("ws", "t", "d", true)
-	c2a, _ := c2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	_, cmd2 := c2a.(Confirm).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	c2a, _ := c2.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	_, cmd2 := c2a.(Confirm).Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := cmd2().(ConfirmDoneMsg); got.Yes {
 		t.Errorf("expected no, got %+v", got)
+	}
+}
+
+// Bubble Tea v2 reports the space bar as "space" rather than " ".
+func TestPickerAndConfirmSelectOnSpace(t *testing.T) {
+	space := tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+
+	p := NewPicker("t", "pick", nil, []PickerItem{{Label: "x"}})
+	_, cmd := p.Update(space)
+	if cmd == nil {
+		t.Fatalf("expected picker completion cmd on space")
+	}
+	if got := cmd().(PickerDoneMsg); got.Item.Label != "x" {
+		t.Errorf("unexpected picker msg: %+v", got)
+	}
+
+	c := NewConfirm("c", "title", "", false)
+	_, cmd = c.Update(space)
+	if cmd == nil {
+		t.Fatalf("expected confirm completion cmd on space")
+	}
+	if got := cmd().(ConfirmDoneMsg); got.Yes {
+		t.Errorf("expected no, got %+v", got)
+	}
+}
+
+type stubModel struct{ n int }
+
+func (s stubModel) Init() tea.Cmd { return nil }
+func (s stubModel) Update(tea.Msg) (tea.Model, tea.Cmd) {
+	s.n++
+	return s, nil
+}
+func (s stubModel) View() tea.View { return tea.NewView("stub") }
+
+func TestAltScreenWrapperSetsAltScreen(t *testing.T) {
+	var m tea.Model = altScreen{stubModel{}}
+	m, _ = m.Update(nil)
+	a, ok := m.(altScreen)
+	if !ok {
+		t.Fatalf("Update should keep the wrapper, got %T", m)
+	}
+	if a.Model.(stubModel).n != 1 {
+		t.Errorf("inner model not updated")
+	}
+	v := a.View()
+	if !v.AltScreen || v.Content != "stub" {
+		t.Errorf("unexpected view: altscreen=%v content=%q", v.AltScreen, v.Content)
 	}
 }
 
@@ -131,7 +179,7 @@ func TestAsyncTaskPropagatesError(t *testing.T) {
 }
 
 func TestHandleGlobalQuitsOnQ(t *testing.T) {
-	cmd := HandleGlobal(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	cmd := HandleGlobal(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if cmd == nil {
 		t.Fatalf("expected quit cmd")
 	}
@@ -142,7 +190,7 @@ func TestHandleGlobalQuitsOnQ(t *testing.T) {
 }
 
 func TestHandleGlobalIgnoresOtherKeys(t *testing.T) {
-	if cmd := HandleGlobal(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}); cmd != nil {
+	if cmd := HandleGlobal(tea.KeyPressMsg{Code: 'a', Text: "a"}); cmd != nil {
 		t.Errorf("expected nil cmd for non-quit key")
 	}
 }

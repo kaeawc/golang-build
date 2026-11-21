@@ -3,8 +3,9 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // TextInputDoneMsg is emitted when the user submits a non-empty value
@@ -33,6 +34,10 @@ func NewTextInput(tag, title, prompt, placeholder string, validate func(string) 
 	ti.Placeholder = placeholder
 	ti.Prompt = "> "
 	ti.CharLimit = 128
+	// v2 defaults tint the prompt; keep it unstyled as in v1.
+	styles := ti.Styles()
+	styles.Focused.Prompt = lipgloss.NewStyle()
+	ti.SetStyles(styles)
 	ti.Focus()
 	return TextInput{
 		tag:      tag,
@@ -48,7 +53,7 @@ func (t TextInput) Init() tea.Cmd {
 }
 
 func (t TextInput) Update(msg tea.Msg) (Phase, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok && km.Type == tea.KeyEnter {
+	if km, ok := msg.(tea.KeyPressMsg); ok && km.Code == tea.KeyEnter {
 		val := strings.TrimSpace(t.input.Value())
 		if val == "" {
 			t.errMsg = "value is required"

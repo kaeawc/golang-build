@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kaeawc/golang-build/internal/tui"
 )
@@ -85,11 +85,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
 	if m.err != nil {
-		return tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n"
+		return tea.NewView(tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n")
 	}
-	return m.phase.View()
+	return tea.NewView(m.phase.View())
 }
 
 // ---------- phase factories -------------------------------------------------
