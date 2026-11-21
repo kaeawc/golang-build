@@ -11,6 +11,8 @@ Experimental Go build tooling, references, and CI pipeline.
 - `cmd/devup` — TUI wrapper around `docker compose`: pick service, pick action, view output. Demonstrates subprocess management via `internal/proc`.
 - `cmd/migrate` — TUI for inspecting and applying schema migrations. Composes `AsyncTask`/`Picker`/`Confirm`/`Done` against a `Migrator` interface; falls back to a `FakeMigrator` with `--fake` for demos / CI without a database.
 - `cmd/inspect` — TUI demo that wires `internal/eventbus` into the `LiveView` phase: pick a scenario, watch synthetic events flow with live counters, level breakdown, and a rolling tail of the most recent events.
+- `cmd/mcp` — Model Context Protocol server (spec 2026-07-28, compatible with 2025-11-25 clients) exposing the users directory over stdio or streamable HTTP. See [docs/mcp.md](docs/mcp.md).
+- `cmd/mcpclient` — plain CLI MCP client that walks through every server feature (discovery, pagination, subscriptions, progress, elicitation, ...).
 
 ## TUI scaffolding
 
@@ -30,3 +32,21 @@ make build-onboard
 ./onboard                              # interactive
 ./onboard --preset standard --yes      # headless, writes .env with defaults
 ```
+
+## MCP server
+
+`internal/mcpserver` builds an MCP server on the official Go SDK
+(`github.com/modelcontextprotocol/go-sdk`) that targets spec revision
+2026-07-28: `server/discover`, stateless streamable HTTP, multi round-trip
+elicitation, cacheable list results, and `subscriptions/listen` — while still
+serving 2025-11-25-era clients through the classic `initialize` handshake.
+
+```bash
+go build -o mcp ./cmd/mcp && go build -o mcpclient ./cmd/mcpclient
+./mcpclient -yes                                 # spawns ./mcp over stdio, runs the demo
+./mcp -transport=http &                          # http://127.0.0.1:8081/mcp
+./mcpclient -url http://127.0.0.1:8081/mcp -protocol 2025-11-25 -yes
+```
+
+Architecture, the feature-to-spec mapping, Claude Code / Claude Desktop
+configuration, auth, and trade-offs are in [docs/mcp.md](docs/mcp.md).
