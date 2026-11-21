@@ -31,3 +31,48 @@ func (q *Queries) CreateUser(ctx context.Context, name string) (User, error) {
 	var i User
 	return i, row.Scan(&i.ID, &i.Name)
 }
+
+const listUsersAfter = `-- name: ListUsersAfter :many
+SELECT id, name FROM users WHERE id > $1 ORDER BY id LIMIT $2`
+
+type ListUsersAfterParams struct {
+	ID    int64
+	Limit int32
+}
+
+func (q *Queries) ListUsersAfter(ctx context.Context, arg ListUsersAfterParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersAfter, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+const getUser = `-- name: GetUser :one
+SELECT id, name FROM users WHERE id = $1`
+
+func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUser, id)
+	var i User
+	return i, row.Scan(&i.ID, &i.Name)
+}
+
+const deleteUser = `-- name: DeleteUser :execrows
+DELETE FROM users WHERE id = $1`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUser, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
