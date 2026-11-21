@@ -56,7 +56,8 @@ type Deps struct {
 	ConsentURL string
 	// Version overrides the build-info derived implementation version.
 	Version string
-	// PageSize caps items per page for the MCP list methods. Default 10.
+	// PageSize caps items per page for the MCP list methods. Default 5, so
+	// clients visibly exercise cursor pagination.
 	PageSize int
 	// ListTTL is the SEP-2549 freshness hint attached to list results.
 	ListTTL time.Duration
@@ -126,7 +127,7 @@ func (a *app) applyDefaults() {
 		a.IDs = idgen.UUID{}
 	}
 	if a.PageSize <= 0 {
-		a.PageSize = 10
+		a.PageSize = 5
 	}
 	if a.ListTTL == 0 {
 		a.ListTTL = time.Minute

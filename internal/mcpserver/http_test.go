@@ -216,7 +216,8 @@ func TestHTTPAuth(t *testing.T) {
 	t.Run("protected resource metadata", func(t *testing.T) {
 		t.Parallel()
 		for _, u := range []string{prm, f.base + PathPRM} {
-			resp, err := http.Get(u) //nolint:noctx // test helper
+			req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, u, nil)
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				t.Fatal(err)
 			}
