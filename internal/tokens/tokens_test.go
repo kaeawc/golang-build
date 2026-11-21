@@ -20,13 +20,11 @@ func TestHMACSignAndVerify(t *testing.T) {
 	is := NewHMAC256([]byte("secret"), WithClock(clk))
 
 	c := myClaims{
-		StandardClaims: StandardClaims{
-			Subject:   "u_42",
-			IssuedAt:  clk.Now().Unix(),
-			ExpiresAt: clk.Now().Add(time.Hour).Unix(),
-		},
-		UserID: "u_42",
-		Role:   "admin",
+		Subject:   "u_42",
+		IssuedAt:  clk.Now().Unix(),
+		ExpiresAt: clk.Now().Add(time.Hour).Unix(),
+		UserID:    "u_42",
+		Role:      "admin",
 	}
 	tok, err := is.Sign(c)
 	if err != nil {
@@ -89,9 +87,9 @@ func TestVerifyRejectsAlgNone(t *testing.T) {
 func TestVerifyExpired(t *testing.T) {
 	clk := clock.NewFake(time.Unix(1700000000, 0))
 	is := NewHMAC256([]byte("k"), WithClock(clk))
-	tok, _ := is.Sign(myClaims{StandardClaims: StandardClaims{
+	tok, _ := is.Sign(myClaims{
 		ExpiresAt: clk.Now().Add(time.Minute).Unix(),
-	}})
+	})
 
 	// Just-before expiry: passes.
 	clk.Advance(59 * time.Second)
@@ -110,9 +108,9 @@ func TestVerifyExpired(t *testing.T) {
 func TestVerifyNotYetValid(t *testing.T) {
 	clk := clock.NewFake(time.Unix(1700000000, 0))
 	is := NewHMAC256([]byte("k"), WithClock(clk))
-	tok, _ := is.Sign(myClaims{StandardClaims: StandardClaims{
+	tok, _ := is.Sign(myClaims{
 		NotBefore: clk.Now().Add(time.Minute).Unix(),
-	}})
+	})
 
 	err := is.Verify(tok, &myClaims{})
 	if !errors.Is(err, ErrNotYetValid) {
@@ -128,9 +126,9 @@ func TestVerifyNotYetValid(t *testing.T) {
 func TestVerifyLeewayAcceptsSlightSkew(t *testing.T) {
 	clk := clock.NewFake(time.Unix(1700000000, 0))
 	is := NewHMAC256([]byte("k"), WithClock(clk), WithLeeway(30*time.Second))
-	tok, _ := is.Sign(myClaims{StandardClaims: StandardClaims{
+	tok, _ := is.Sign(myClaims{
 		ExpiresAt: clk.Now().Add(time.Minute).Unix(),
-	}})
+	})
 
 	// 75s after issue, 15s past expiry — within leeway.
 	clk.Advance(75 * time.Second)
@@ -224,10 +222,10 @@ func TestFakeSetError(t *testing.T) {
 
 func TestFakeCounters(t *testing.T) {
 	f := AlwaysValid(myClaims{})
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, _ = f.Sign(myClaims{})
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_ = f.Verify("x", &myClaims{})
 	}
 	if f.SignCount() != 3 {
@@ -260,10 +258,8 @@ func TestFakeSetClaims(t *testing.T) {
 func TestRoundTripWithSpecialChars(t *testing.T) {
 	is := NewHMAC256([]byte("secret"))
 	c := myClaims{
-		UserID: "user with spaces & émojis 🎉",
-		StandardClaims: StandardClaims{
-			Subject: "sub/with/slashes+plus=eq",
-		},
+		UserID:  "user with spaces & émojis 🎉",
+		Subject: "sub/with/slashes+plus=eq",
 	}
 	tok, err := is.Sign(c)
 	if err != nil {

@@ -15,7 +15,7 @@ var errBoom = errors.New("boom")
 
 func TestClosedAllowsCalls(t *testing.T) {
 	cb := New(Config{Threshold: 3, Cooldown: time.Second})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if err := cb.Do(context.Background(), func(context.Context) error { return nil }); err != nil {
 			t.Errorf("Do #%d: %v", i, err)
 		}
@@ -29,7 +29,7 @@ func TestTripsAfterThreshold(t *testing.T) {
 	clk := clock.NewFake(time.Unix(0, 0))
 	cb := New(Config{Threshold: 3, Cooldown: time.Second, Clock: clk})
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = cb.Do(context.Background(), func(context.Context) error { return errBoom })
 	}
 	if cb.State() != StateOpen {
@@ -130,7 +130,7 @@ func TestHalfOpenSerializesProbe(t *testing.T) {
 
 	<-probeStarted
 	// While probe is in flight, concurrent calls must short-circuit.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		err := cb.Do(context.Background(), func(context.Context) error { return nil })
 		if !errors.Is(err, ErrOpen) {
 			t.Errorf("concurrent call during probe: err = %v, want ErrOpen", err)
@@ -150,7 +150,7 @@ func TestIsFailureFilter(t *testing.T) {
 			return err != nil && !errors.Is(err, notFound)
 		},
 	})
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_ = cb.Do(context.Background(), func(context.Context) error { return notFound })
 	}
 	if cb.State() != StateClosed {
@@ -197,7 +197,7 @@ func TestStatsCounters(t *testing.T) {
 	_ = cb.Do(context.Background(), func(context.Context) error { return nil })
 	_ = cb.Do(context.Background(), func(context.Context) error { return errBoom })
 	_ = cb.Do(context.Background(), func(context.Context) error { return errBoom })
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = cb.Do(context.Background(), func(context.Context) error { return nil })
 	}
 
@@ -262,17 +262,15 @@ func TestConcurrentDo(t *testing.T) {
 	cb := New(Config{Threshold: 100})
 	var success, opens atomic.Int64
 	var wg sync.WaitGroup
-	for i := 0; i < 200; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 200 {
+		wg.Go(func() {
 			err := cb.Do(context.Background(), func(context.Context) error { return nil })
 			if errors.Is(err, ErrOpen) {
 				opens.Add(1)
 			} else if err == nil {
 				success.Add(1)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if success.Load() != 200 {

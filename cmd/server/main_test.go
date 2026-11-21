@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+
 	"github.com/kaeawc/golang-build/internal/db"
 	"github.com/kaeawc/golang-build/internal/handlers"
 )
@@ -67,7 +68,7 @@ func newTestRouter() *mux.Router {
 func TestMainAppStartup(t *testing.T) {
 	router := newTestRouter()
 
-	req, err := http.NewRequest("GET", "/users", nil)
+	req, err := http.NewRequest(http.MethodGet, "/users", nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}

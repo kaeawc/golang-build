@@ -42,7 +42,7 @@ func (f *fakeClient) Do(req *http.Request) (*http.Response, error) {
 
 func TestEngineHitsTestServerAndRecordsStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
@@ -194,7 +194,7 @@ func TestRenderSnapshotMentionsKeyMetrics(t *testing.T) {
 
 func TestHeadlessRunsAgainstTestServer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 

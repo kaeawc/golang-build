@@ -20,7 +20,7 @@ func TestInspectorAccumulatesAndRingBuffersEvents(t *testing.T) {
 	defer insp.Stop()
 	insp.Start()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		level := "info"
 		if i%3 == 0 {
 			level = "warn"

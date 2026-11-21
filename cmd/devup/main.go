@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/kaeawc/golang-build/internal/proc"
 	"github.com/kaeawc/golang-build/internal/tui"
@@ -78,10 +79,5 @@ func runHeadlessAction(out io.Writer, runner proc.Runner, action, service string
 }
 
 func validAction(a string) bool {
-	for _, valid := range composeActions {
-		if a == valid {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(composeActions, a)
 }

@@ -112,11 +112,16 @@ func TestMaxDelayCap(t *testing.T) {
 	}, func(context.Context, int) error { return errors.New("x") })
 
 	// 100, 200, 250 (capped), 250, 250
-	want := []time.Duration{100, 200, 250, 250, 250}
-	for i, ms := range want {
-		got := s.Delays[i]
-		if got != ms*time.Millisecond {
-			t.Errorf("delay[%d] = %v, want %v", i, got, ms*time.Millisecond)
+	want := []time.Duration{
+		100 * time.Millisecond,
+		200 * time.Millisecond,
+		250 * time.Millisecond,
+		250 * time.Millisecond,
+		250 * time.Millisecond,
+	}
+	for i, w := range want {
+		if got := s.Delays[i]; got != w {
+			t.Errorf("delay[%d] = %v, want %v", i, got, w)
 		}
 	}
 }

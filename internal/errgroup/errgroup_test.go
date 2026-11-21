@@ -13,7 +13,7 @@ import (
 
 func TestSuccessReturnsNil(t *testing.T) {
 	g, _ := WithContext(context.Background())
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		g.Go(func() error { return nil })
 	}
 	if err := g.Wait(); err != nil {
@@ -73,7 +73,7 @@ func TestSetLimitBoundsConcurrency(t *testing.T) {
 	// `hold`.
 	dispatched := make(chan struct{})
 	go func() {
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			g.Go(func() error {
 				cur := inFlight.Add(1)
 				for {
@@ -126,7 +126,7 @@ func TestSetLimiterSharesAcrossGroups(t *testing.T) {
 
 	dispatched := make(chan struct{})
 	go func() {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			g1.Go(func() error { count(); <-hold; return nil })
 			g2.Go(func() error { count(); <-hold; return nil })
 		}
@@ -263,12 +263,10 @@ func TestConcurrentGo(t *testing.T) {
 	g.SetLimit(8)
 	var counter atomic.Int32
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			g.Go(func() error { counter.Add(1); return nil })
-		}()
+		})
 	}
 	wg.Wait()
 	if err := g.Wait(); err != nil {

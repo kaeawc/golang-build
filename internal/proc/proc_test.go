@@ -225,10 +225,10 @@ func TestFake_ConcurrentRun(t *testing.T) {
 	const goroutines = 16
 	const iterations = 50
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				_, _ = f.Run(context.Background(), Cmd{Name: "git", Args: []string{"status"}})
 			}
 		}()

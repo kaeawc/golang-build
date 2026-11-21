@@ -48,7 +48,7 @@ func TestWriteRaw(t *testing.T) {
 
 func TestWriteErrorEnvelope(t *testing.T) {
 	rec := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 
 	if err := WriteError(rec, r, http.StatusNotFound, "user.not_found", "no such user"); err != nil {
 		t.Fatalf("WriteError: %v", err)
@@ -70,7 +70,7 @@ func TestWriteErrorEnvelope(t *testing.T) {
 
 func TestWriteErrorIncludesRequestID(t *testing.T) {
 	rec := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	// Run through RequestID middleware to populate the context.
 	gen := idgen.NewSequence("rid")
 	httpmw.RequestID(gen)(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -88,7 +88,7 @@ func TestWriteErrorIncludesRequestID(t *testing.T) {
 
 func TestWriteErrorDetails(t *testing.T) {
 	rec := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 
 	type fieldErr struct {
 		Field string `json:"field"`
@@ -119,7 +119,7 @@ func TestDecodeMaxBytes(t *testing.T) {
 	}
 	huge := strings.Repeat("a", 200)
 	body := []byte(`{"x":"` + huge + `"}`)
-	r := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+	r := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 
 	var v payload
 	err := Decode(r, &v, MaxBytes(50))
@@ -139,7 +139,7 @@ func TestDecodeUnknownFieldRejected(t *testing.T) {
 	type payload struct {
 		Name string `json:"name"`
 	}
-	r := httptest.NewRequest("POST", "/", strings.NewReader(`{"name":"alice","extra":"oops"}`))
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"alice","extra":"oops"}`))
 	var v payload
 	err := Decode(r, &v)
 	if err == nil {
@@ -156,7 +156,7 @@ func TestDecodeAllowUnknown(t *testing.T) {
 	type payload struct {
 		Name string `json:"name"`
 	}
-	r := httptest.NewRequest("POST", "/", strings.NewReader(`{"name":"alice","extra":"ok"}`))
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"alice","extra":"ok"}`))
 	var v payload
 	if err := Decode(r, &v, AllowUnknownFields()); err != nil {
 		t.Fatalf("Decode: %v", err)
@@ -167,7 +167,7 @@ func TestDecodeAllowUnknown(t *testing.T) {
 }
 
 func TestDecodeMalformed(t *testing.T) {
-	r := httptest.NewRequest("POST", "/", strings.NewReader(`{"x":}`))
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"x":}`))
 	var v map[string]any
 	err := Decode(r, &v)
 	var de *DecodeError
@@ -181,7 +181,7 @@ func TestDecodeWrongType(t *testing.T) {
 	type payload struct {
 		Age int `json:"age"`
 	}
-	r := httptest.NewRequest("POST", "/", strings.NewReader(`{"age":"not a number"}`))
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"age":"not a number"}`))
 	var v payload
 	err := Decode(r, &v)
 	var de *DecodeError
@@ -192,7 +192,7 @@ func TestDecodeWrongType(t *testing.T) {
 }
 
 func TestDecodeRequireBody(t *testing.T) {
-	r := httptest.NewRequest("POST", "/", http.NoBody)
+	r := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	var v map[string]any
 	err := Decode(r, &v, RequireBody())
 	var de *DecodeError
@@ -211,7 +211,7 @@ func TestDecodeNilBody(t *testing.T) {
 }
 
 func TestDecodeTrailingJSON(t *testing.T) {
-	r := httptest.NewRequest("POST", "/", strings.NewReader(`{"x":1}{"x":2}`))
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"x":1}{"x":2}`))
 	var v map[string]int
 	err := Decode(r, &v)
 	var de *DecodeError
@@ -223,7 +223,7 @@ func TestDecodeTrailingJSON(t *testing.T) {
 
 func TestWriteDecodeErrorTranslatesStatus(t *testing.T) {
 	rec := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 
 	err := &DecodeError{Kind: DecodeKindTooLarge, msg: "too big"}
 	_ = WriteDecodeError(rec, r, err)
@@ -240,7 +240,7 @@ func TestWriteDecodeErrorTranslatesStatus(t *testing.T) {
 
 func TestWriteDecodeErrorEmptyBody(t *testing.T) {
 	rec := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	_ = WriteDecodeError(rec, r, &DecodeError{Kind: DecodeKindEmpty, msg: "no body"})
 	if rec.Code != 400 {
 		t.Errorf("status = %d", rec.Code)
@@ -254,7 +254,7 @@ func TestWriteDecodeErrorEmptyBody(t *testing.T) {
 
 func TestWriteDecodeErrorFallsBackTo500(t *testing.T) {
 	rec := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	_ = WriteDecodeError(rec, r, errors.New("not a DecodeError"))
 	if rec.Code != 500 {
 		t.Errorf("status = %d, want 500", rec.Code)
@@ -287,7 +287,7 @@ func (erroringBody) Read([]byte) (int, error) { return 0, errors.New("read faile
 func (erroringBody) Close() error             { return nil }
 
 func TestDecodeReadError(t *testing.T) {
-	r := httptest.NewRequest("POST", "/", erroringBody{})
+	r := httptest.NewRequest(http.MethodPost, "/", erroringBody{})
 	r.Body = io.NopCloser(erroringBody{})
 	var v map[string]any
 	err := Decode(r, &v)

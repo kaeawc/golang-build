@@ -18,6 +18,7 @@ package httpmw
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/kaeawc/golang-build/internal/idgen"
@@ -36,8 +37,8 @@ type Middleware func(http.Handler) http.Handler
 // A → B → C → h, and whose response flows back h → C → B → A.
 func Compose(mws ...Middleware) Middleware {
 	return func(next http.Handler) http.Handler {
-		for i := len(mws) - 1; i >= 0; i-- {
-			next = mws[i](next)
+		for _, mw := range slices.Backward(mws) {
+			next = mw(next)
 		}
 		return next
 	}

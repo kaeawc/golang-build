@@ -82,7 +82,7 @@ func New(cfg Config) Logger {
 func FromSlog(l *slog.Logger) Logger { return &slogLogger{l: l} }
 
 // Discard returns a Logger that drops everything. Useful for benchmarks.
-func Discard() Logger { return &slogLogger{l: slog.New(slog.NewTextHandler(io.Discard, nil))} }
+func Discard() Logger { return &slogLogger{l: slog.New(slog.DiscardHandler)} }
 
 type slogLogger struct{ l *slog.Logger }
 

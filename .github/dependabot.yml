@@ -25,7 +25,20 @@ updates:
       go-minor-patch:
         update-types: [minor, patch]
 
-  # Docker base images
+  # Dev tools pinned with `tool` directives in tools/go.mod. One grouped PR
+  # a week; CI exercises every tool, so a green run means the bump is safe.
+  - package-ecosystem: gomod
+    directory: /tools
+    target-branch: main
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, tools]
+    groups:
+      dev-tools:
+        patterns: ["*"]
+
+  # Docker base images (tags and digests) in ci/Dockerfile
   - package-ecosystem: docker
     directory: /ci
     schedule:

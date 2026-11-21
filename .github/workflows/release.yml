@@ -1,0 +1,45 @@
+name: "Release"
+
+# Push a semver tag (git tag v1.2.3 && git push origin v1.2.3) to build
+# archives for every binary with GoReleaser and attach them, with checksums,
+# SBOMs and build provenance, to a draft GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the release
+      id-token: write       # sign provenance attestations
+      attestations: write
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0    # GoReleaser builds the changelog from history
+
+      - name: "Set up Go"
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+
+      - name: "Install syft (SBOMs)"
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: "Run GoReleaser"
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Attest build provenance"
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-checksums: dist/checksums.txt

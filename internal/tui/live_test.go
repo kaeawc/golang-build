@@ -34,7 +34,7 @@ func TestLiveViewTicksAndCompletes(t *testing.T) {
 
 	// Drive ticks manually, asserting we get a follow-up cmd until done.
 	var phase Phase = v
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		// The cmd returns a liveTickMsg after the timer fires; just
 		// synthesize the message rather than waiting on the timer.
 		next, follow := phase.Update(liveTickMsg{tag: "eng"})
@@ -122,8 +122,10 @@ func intToStr(n int) string {
 }
 
 // Compile check: LiveView satisfies Phase + PhaseIniter.
-var _ Phase = LiveView{}
-var _ PhaseIniter = LiveView{}
+var (
+	_ Phase       = LiveView{}
+	_ PhaseIniter = LiveView{}
+)
 
 // Smoke that tea.Tick actually fires for the documented contract; if
 // this ever stops, our cmd fan-out is wrong. Kept fast (5ms).
