@@ -13,11 +13,18 @@ Experimental Go HTTP server. Template for Go projects with a comprehensive CI pi
 ## Build & Validate
 
 ```bash
-go build -o server ./cmd/server/   # Build the binary
-go vet ./...                        # Static analysis
-go test ./... -count=1              # Full test suite
-make ci                             # vet + test + complexity + lint + security + licenses
+make help                           # List every target
+make build                          # Build all cmd/* binaries into bin/
+make test                           # Full suite with -race and coverage
+make lint                           # golangci-lint (config: .golangci.yml)
+make fmt                            # gofumpt + goimports
+make check                          # Fast pre-push gate: tidy-check, vet, lint, test
+make ci                             # Everything CI runs (adds complexity, gosec, govulncheck, licenses, actionlint)
 ```
+
+Dev tools are pinned in `tools/go.mod` (`tool` directives) and invoked as
+`go tool -modfile=tools/go.mod <tool>`; the Makefile wraps this, so nothing
+needs installing beyond Go. Upgrade them with `make upgrade-tools`.
 
 After any implementation change, run `go build ./... && go vet ./...`.
 Use focused package tests while iterating: `go test ./internal/handlers/ -run TestX -count=1`.
@@ -58,14 +65,17 @@ Use focused package tests while iterating: `go test ./internal/handlers/ -run Te
 - `internal/httpserver/` — graceful HTTP server runner. `New(Config{Addr, Handler, ShutdownTimeout, OnShutdown, ...}).Run(ctx)` binds the listener, serves until ctx cancels or SIGINT/SIGTERM, then drains in-flight requests with a bounded timeout. Sane defaults (10s shutdown, 10s ReadHeaderTimeout against slowloris). Pass `Signals: []os.Signal{}` in tests to disable signal handling.
 - `internal/logger/` — `Logger` interface over `log/slog`. `New(Config{...})` returns a JSON or text logger to stderr. `Capture` is an in-memory implementation that buffers records for tests (`HasMessage(substr)`, `FilterLevel(level)`, `Records()`). `Discard()` returns a no-op for benchmarks. `FromSlog(*slog.Logger)` adapts an existing slog.Logger.
 - `internal/perf/` — local-only timing tracker (no OpenTelemetry, no exporter). `New(false)` is a zero-overhead no-op; `New(true)` records nested phases via `Serial(name) … End()` or via the `defer`-friendly `NewSpan(t, name).Stop()` API (spans support `SetAttr` and `AddMetric`). `NewWithClock(clock.Fake)` makes timing assertions deterministic. `RenderTree(w, entries, RenderOptions{})` prints an ASCII tree with durations and parent-percent (`├─ scan  180ms  90%`); `Summary(entries, topN)` flattens to a "where did time go" list. Designed for CLI tools that want to print their own perf summary at exit.
-- `ci/Dockerfile` — multi-stage build (compile in `golang:alpine`, copy to `scratch`).
+- `ci/Dockerfile` — multi-stage build (bun frontend → Go binary cross-compiled with `-trimpath` → `distroless/static` non-root runtime). Base images pinned by digest.
+- `tools/` — separate module pinning dev tools via `tool` directives.
+- `.goreleaser.yaml` — release archives for every binary; `.github/workflows/release.yml` runs it on `v*` tags.
 - `scripts/` — release-check, workflow validation, and other repo-wide bash scripts.
 - `sql/`, `sqlc.yaml` — SQL schema and sqlc config.
 
 ## CI
 
-`.github/workflows/commit.yml` runs on every push and PR:
-`compile-binary`, `build-image`, `test`, `complexity`, `static-analysis`, `check-licenses`, `security`, `codeql-analysis`. Go version comes from `go.mod`.
+`.github/workflows/commit.yml` runs on PRs and pushes to `main`:
+`compile-binary`, `build-image` (pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security` (gosec), `vulnerabilities` (govulncheck), `release-config` (goreleaser check), `codeql-analysis`. Each job is a `make` target, so `make ci` reproduces it locally. Go version comes from `go.mod`.
+`deploy.yml` deploys to Fly after `commit.yml` succeeds on a push to `main`; `release.yml` publishes on `v*` tags.
 
 ## Conventions
 
