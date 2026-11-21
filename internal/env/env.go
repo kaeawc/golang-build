@@ -7,6 +7,7 @@ package env
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -96,9 +97,7 @@ func (m Map) Lookup(name string) (string, bool) {
 // untouched. Useful for chaining setup.
 func (m Map) With(name, value string) Map {
 	out := make(Map, len(m)+1)
-	for k, v := range m {
-		out[k] = v
-	}
+	maps.Copy(out, m)
 	out[name] = value
 	return out
 }

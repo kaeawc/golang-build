@@ -301,6 +301,7 @@ func (d memDirEntry) Type() os.FileMode {
 	}
 	return 0
 }
+
 func (d memDirEntry) Info() (os.FileInfo, error) {
 	return memInfo(d), nil
 }

@@ -281,18 +281,18 @@ func TestMem_ConcurrentReadsAndWrites(t *testing.T) {
 	const writers = 8
 	const iterations = 100
 	wg.Add(writers * 2)
-	for i := 0; i < writers; i++ {
+	for i := range writers {
 		idx := i
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				path := filepath.Join("/data", "f"+itoa(idx)+".txt")
 				_ = m.WriteFile(path, []byte("x"), 0o644)
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				_, _ = m.ReadDir("/data")
 			}
 		}()

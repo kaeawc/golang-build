@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -143,10 +144,5 @@ func (a *audience) UnmarshalJSON(b []byte) error {
 }
 
 func (a audience) contains(want string) bool {
-	for _, v := range a {
-		if v == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a, want)
 }

@@ -125,7 +125,7 @@ func TestGetOrSetCachesResult(t *testing.T) {
 		return 42, nil
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		v, err := m.GetOrSet(context.Background(), "k", 0, compute)
 		if err != nil || v != 42 {
 			t.Fatalf("GetOrSet = (%d, %v)", v, err)
@@ -185,7 +185,7 @@ func TestCloseIsIdempotent(t *testing.T) {
 func TestShardingHandlesManyKeys(t *testing.T) {
 	m := NewMemory[int](Config{Shards: 8})
 	defer m.Close()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		m.Set(string(rune('a'+(i%26))), i)
 	}
 	// Last write wins per key; expect 26 distinct keys.
@@ -206,7 +206,7 @@ func TestConcurrentSetGet(t *testing.T) {
 	m := NewMemory[int](Config{})
 	defer m.Close()
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(2)
 		go func(i int) {
 			defer wg.Done()

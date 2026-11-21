@@ -13,7 +13,7 @@ func TestUUID_NextIsHexAndUnique(t *testing.T) {
 	seen := make(map[string]bool)
 	const n = 1000
 	g := UUID{}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		id := g.Next()
 		if !hex.MatchString(id) {
 			t.Fatalf("id %q does not match 32-char lowercase hex", id)
@@ -71,10 +71,10 @@ func TestSequence_ConcurrentNextProducesUniqueIds(t *testing.T) {
 	out := make(chan string, goroutines*iterations)
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				out <- s.Next()
 			}
 		}()

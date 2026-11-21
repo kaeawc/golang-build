@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"net/http"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 )
@@ -95,12 +96,10 @@ func (e *Engine) Start(ctx context.Context) {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	for i := 0; i < e.cfg.Concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range e.cfg.Concurrency {
+		wg.Go(func() {
 			e.workerLoop(runCtx)
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -180,9 +179,7 @@ func (e *Engine) Snapshot() Snapshot {
 	p50, p95, p99 := percentiles(e.latencies)
 
 	statuses := make(map[int]int, len(e.statusCounts))
-	for k, v := range e.statusCounts {
-		statuses[k] = v
-	}
+	maps.Copy(statuses, e.statusCounts)
 
 	return Snapshot{
 		Elapsed:       elapsed,
@@ -208,7 +205,7 @@ func percentiles(latencies []time.Duration) (p50, p95, p99 time.Duration) {
 	}
 	sorted := make([]time.Duration, len(latencies))
 	copy(sorted, latencies)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	slices.Sort(sorted)
 	pick := func(p float64) time.Duration {
 		idx := int(math.Round(float64(len(sorted)-1) * p))
 		return sorted[idx]

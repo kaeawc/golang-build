@@ -30,7 +30,7 @@ func TestComposeAppliesInOrder(t *testing.T) {
 	chain := Compose(mw("a"), mw("b"), mw("c"))
 	chain(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		order = append(order, "handler")
-	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
 	want := []string{"a-pre", "b-pre", "c-pre", "handler", "c-post", "b-post", "a-post"}
 	if len(order) != len(want) {
@@ -52,7 +52,7 @@ func TestRequestIDGenerates(t *testing.T) {
 	}))
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if captured != "req-1" {
 		t.Errorf("captured = %q, want req-1", captured)
@@ -70,7 +70,7 @@ func TestRequestIDPreservesIncoming(t *testing.T) {
 		captured = RequestIDFrom(r)
 	}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("X-Request-ID", "client-supplied")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
@@ -91,7 +91,7 @@ func TestRequestIDSanitizesIncoming(t *testing.T) {
 		captured = RequestIDFrom(r)
 	}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("X-Request-ID", "evil\r\nX-Injected: yes")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
@@ -112,7 +112,7 @@ func TestRequestIDBoundsLength(t *testing.T) {
 		captured = RequestIDFrom(r)
 	}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("X-Request-ID", strings.Repeat("a", MaxRequestIDLength*4))
 	h.ServeHTTP(httptest.NewRecorder(), r)
 
@@ -135,7 +135,7 @@ func TestRealIPTrustsForwardedHeader(t *testing.T) {
 		captured = RealIPFrom(r)
 	}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "10.1.2.3:1234"
 	r.Header.Set("X-Forwarded-For", "203.0.113.5, 10.0.0.1")
 
@@ -153,7 +153,7 @@ func TestRealIPRejectsUntrustedPeer(t *testing.T) {
 		captured = RealIPFrom(r)
 	}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "203.0.113.99:1234"
 	r.Header.Set("X-Forwarded-For", "10.0.0.5") // attacker tries to spoof
 
@@ -171,7 +171,7 @@ func TestRealIPFallsBackToXRealIP(t *testing.T) {
 		captured = RealIPFrom(r)
 	}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "10.0.0.1:1234"
 	r.Header.Set("X-Real-IP", "198.51.100.7")
 
@@ -202,7 +202,7 @@ func TestRecoverWritesInternalServerError(t *testing.T) {
 	}))
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
@@ -225,19 +225,19 @@ func TestRecoverPropagatesAbortHandler(t *testing.T) {
 			t.Errorf("expected ErrAbortHandler to propagate, got %v", rec)
 		}
 	}()
-	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 }
 
 func TestLoggerEmitsAccessLog(t *testing.T) {
 	cap := logger.NewCapture(slog.LevelDebug)
 	mw := Logger(cap)
 	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(201)
+		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte("hi"))
 	}))
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("POST", "/users", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/users", nil))
 
 	recs := cap.Records()
 	if len(recs) != 1 {
@@ -261,7 +261,7 @@ func TestLoggerWithoutWriteHeaderDefaultsToOK(t *testing.T) {
 	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	}))
-	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
 	recs := cap.Records()
 	if recs[0].Attrs["status"] != 200 {
@@ -276,7 +276,7 @@ func TestTimeoutCancelsContext(t *testing.T) {
 		<-r.Context().Done()
 		observedErr = r.Context().Err()
 	}))
-	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if observedErr == nil {
 		t.Fatal("expected ctx error")
@@ -285,9 +285,9 @@ func TestTimeoutCancelsContext(t *testing.T) {
 
 func TestSecureHeadersDefaults(t *testing.T) {
 	mw := SecureHeaders(DefaultSecureHeaders)
-	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) }))
+	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Header().Get("X-Frame-Options") != "DENY" {
 		t.Error("X-Frame-Options not set")
@@ -307,7 +307,7 @@ func TestSecureHeadersOmitsEmpty(t *testing.T) {
 	mw := SecureHeaders(SecureHeadersConfig{HSTS: "max-age=63072000"})
 	h := mw(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Header().Get("Strict-Transport-Security") != "max-age=63072000" {
 		t.Error("HSTS not set")
@@ -319,9 +319,9 @@ func TestSecureHeadersOmitsEmpty(t *testing.T) {
 
 func TestCORSAllowedOriginExact(t *testing.T) {
 	mw := CORS(CORSConfig{AllowedOrigins: []string{"https://app.example"}})
-	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) }))
+	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Origin", "https://app.example")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
@@ -361,7 +361,7 @@ func TestCORSWildcardWithCredentialsEchoesOrigin(t *testing.T) {
 	mw := CORS(CORSConfig{AllowedOrigins: []string{"*"}, AllowCredentials: true})
 	h := mw(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Origin", "https://specific.example")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
@@ -378,7 +378,7 @@ func TestCORSOriginNotAllowed(t *testing.T) {
 	mw := CORS(CORSConfig{AllowedOrigins: []string{"https://allowed"}})
 	h := mw(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Origin", "https://attacker")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
@@ -416,7 +416,7 @@ func TestLoggerForwardsHijack(t *testing.T) {
 			t.Fatalf("Hijack: %v", err)
 		}
 		_ = c.Close()
-	})).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	})).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !rec.hijacked {
 		t.Error("Hijack was not forwarded to underlying writer")
 	}
@@ -434,7 +434,7 @@ func TestLoggerHijackErrorsWhenUnsupported(t *testing.T) {
 		if err == nil {
 			t.Error("Hijack on non-hijackable writer should error")
 		}
-	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 }
 
 // fullChain end-to-end exercises Compose + every middleware.
@@ -461,7 +461,7 @@ func TestFullChainEndToEnd(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d", resp.StatusCode)
 	}
 	if !cap.HasMessage("http request") {

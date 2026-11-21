@@ -1,7 +1,12 @@
 name: "Deploy"
 
+# Deploys main to production after the Commit workflow passes on it.
+# workflow_run (rather than calling commit.yml) means CI runs once per push
+# and this workflow needs no more permissions than the deploy itself.
 on:
-  push:
+  workflow_run:
+    workflows: ["Commit"]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -9,22 +14,27 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  checks: write
   contents: read
 
 jobs:
-  test:
-    uses: ./.github/workflows/commit.yml
-
   deploy:
     name: "Fly deploy (production)"
-    needs: test
+    # Only a successful push to main in this repository. workflow_run also
+    # fires for pull_request runs whose head branch happens to be named
+    # "main" (e.g. from a fork), which must never deploy.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Deploy exactly the commit CI tested, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@1.6
 
       - name: "flyctl deploy"
         run: flyctl deploy --remote-only --strategy rolling

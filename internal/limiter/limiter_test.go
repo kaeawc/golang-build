@@ -155,7 +155,7 @@ func TestStatsTracksWaiters(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(3)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		go func() {
 			defer wg.Done()
 			_ = s.Acquire(context.Background())
@@ -180,10 +180,8 @@ func TestConcurrentNeverExceedsCapacity(t *testing.T) {
 	s := NewSemaphore(cap)
 	var inFlight, peak atomic.Int32
 	var wg sync.WaitGroup
-	for i := 0; i < 200; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 200 {
+		wg.Go(func() {
 			_ = s.Acquire(context.Background())
 			cur := inFlight.Add(1)
 			for {
@@ -195,7 +193,7 @@ func TestConcurrentNeverExceedsCapacity(t *testing.T) {
 			time.Sleep(time.Millisecond)
 			inFlight.Add(-1)
 			s.Release()
-		}()
+		})
 	}
 	wg.Wait()
 	if peak.Load() > int32(cap) {
