@@ -9,7 +9,7 @@ var uuidRE = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-
 
 func TestCryptoUUIDFormat(t *testing.T) {
 	c := NewCrypto()
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		u := c.UUID()
 		if !uuidRE.MatchString(u) {
 			t.Fatalf("invalid UUID: %q", u)
@@ -20,7 +20,7 @@ func TestCryptoUUIDFormat(t *testing.T) {
 func TestCryptoUUIDsAreUnique(t *testing.T) {
 	c := NewCrypto()
 	seen := map[string]struct{}{}
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		u := c.UUID()
 		if _, dup := seen[u]; dup {
 			t.Fatalf("duplicate UUID after %d iterations: %s", i, u)
@@ -32,7 +32,7 @@ func TestCryptoUUIDsAreUnique(t *testing.T) {
 func TestSeededIsDeterministic(t *testing.T) {
 	a := NewSeeded(42)
 	b := NewSeeded(42)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if a.IntN(1000) != b.IntN(1000) {
 			t.Fatalf("seeded sources diverged at iteration %d", i)
 		}
@@ -43,7 +43,7 @@ func TestSeededDifferentSeedsDiffer(t *testing.T) {
 	a := NewSeeded(1)
 	b := NewSeeded(2)
 	same := 0
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if a.IntN(1<<30) == b.IntN(1<<30) {
 			same++
 		}
@@ -55,7 +55,7 @@ func TestSeededDifferentSeedsDiffer(t *testing.T) {
 
 func TestSeededUUIDFormat(t *testing.T) {
 	s := NewSeeded(7)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		u := s.UUID()
 		if !uuidRE.MatchString(u) {
 			t.Fatalf("invalid UUID: %q", u)
@@ -65,7 +65,7 @@ func TestSeededUUIDFormat(t *testing.T) {
 
 func TestIntRange(t *testing.T) {
 	s := NewSeeded(99)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		v := s.IntRange(5, 10)
 		if v < 5 || v > 10 {
 			t.Fatalf("IntRange(5,10) = %d out of bounds", v)

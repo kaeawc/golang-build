@@ -12,7 +12,7 @@ import (
 func TestAsyncWriter_CloseFlushesQueuedJobs(t *testing.T) {
 	w := cacheutil.NewAsyncWriter(2, 8)
 	var ran atomic.Int64
-	for i := 0; i < 16; i++ {
+	for range 16 {
 		if !w.Submit(func() (int64, error) {
 			ran.Add(1)
 			return 0, nil
@@ -42,7 +42,7 @@ func TestAsyncWriter_SubmitFallsBackWhenQueueFull(t *testing.T) {
 	}
 
 	var queued int
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		if w.Submit(func() (int64, error) { return 0, nil }) {
 			queued++
 		}

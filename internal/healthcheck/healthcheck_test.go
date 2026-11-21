@@ -146,7 +146,7 @@ func TestHandlerStatusCodes(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
 
@@ -191,7 +191,7 @@ func TestProbesRunInParallel(t *testing.T) {
 	r := NewRegistry(WithProbeTimeout(time.Second))
 	const n = 4
 	const probeDelay = 80 * time.Millisecond
-	for i := 0; i < n; i++ {
+	for i := range n {
 		name := string(rune('a' + i))
 		r.RegisterReadiness(name, func(context.Context) error {
 			time.Sleep(probeDelay)
@@ -217,7 +217,7 @@ func TestConcurrentRegisterAndCheck(t *testing.T) {
 	var wg sync.WaitGroup
 	var checks atomic.Int32
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(2)
 		go func(i int) {
 			defer wg.Done()

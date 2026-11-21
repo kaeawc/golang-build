@@ -70,7 +70,7 @@ func TestServesAndShutsDown(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 200 || string(body) != "ok\n" {
+	if resp.StatusCode != http.StatusOK || string(body) != "ok\n" {
 		t.Errorf("got status=%d body=%q", resp.StatusCode, body)
 	}
 
@@ -145,7 +145,7 @@ func TestShutdownDrainsInflight(t *testing.T) {
 	mux.HandleFunc("/slow", func(w http.ResponseWriter, _ *http.Request) {
 		close(started)
 		<-hold
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	_, url, stop := runServer(t, mux, func(c *Config) {
 		c.ShutdownTimeout = 5 * time.Second

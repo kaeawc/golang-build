@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
@@ -125,14 +126,14 @@ func (c *Coordinator) Shutdown(ctx context.Context) error {
 	defer c.doneOnce.Do(func() { close(c.doneCh) })
 
 	var errs []error
-	for i := len(hooks) - 1; i >= 0; i-- {
+	for _, hook := range slices.Backward(hooks) {
 		if err := ctx.Err(); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown aborted before %q: %w", hooks[i].name, err))
+			errs = append(errs, fmt.Errorf("shutdown aborted before %q: %w", hook.name, err))
 			break
 		}
-		if err := runHook(ctx, hooks[i], timeout); err != nil {
-			onErr(hooks[i].name, err)
-			errs = append(errs, fmt.Errorf("hook %q: %w", hooks[i].name, err))
+		if err := runHook(ctx, hook, timeout); err != nil {
+			onErr(hook.name, err)
+			errs = append(errs, fmt.Errorf("hook %q: %w", hook.name, err))
 		}
 	}
 	return errors.Join(errs...)

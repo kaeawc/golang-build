@@ -35,7 +35,7 @@ func (m *mockCache) Set(_ context.Context, _ string, _ string, _ time.Duration) 
 func (m *mockCache) Close() {}
 
 func TestGetUsers(t *testing.T) {
-	req, err := http.NewRequest("GET", "/users", nil)
+	req, err := http.NewRequest(http.MethodGet, "/users", nil)
 	if err != nil {
 		t.Fatalf("Could not create request: %v", err)
 	}

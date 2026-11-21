@@ -9,7 +9,7 @@ import (
 )
 
 var gzipPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
 		return w
 	},

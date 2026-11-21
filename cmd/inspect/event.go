@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"sync"
 	"time"
 
@@ -108,13 +109,9 @@ func (i *Inspector) snapshot() Snapshot {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	byLevel := make(map[string]int64, len(i.byLevel))
-	for k, v := range i.byLevel {
-		byLevel[k] = v
-	}
+	maps.Copy(byLevel, i.byLevel)
 	byKind := make(map[string]int64, len(i.byKind))
-	for k, v := range i.byKind {
-		byKind[k] = v
-	}
+	maps.Copy(byKind, i.byKind)
 	recent := make([]Event, len(i.recent))
 	copy(recent, i.recent)
 	end := time.Now()
