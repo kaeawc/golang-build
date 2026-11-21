@@ -19,8 +19,7 @@
 
 ## Checklist
 
-- [ ] No new `go vet` warnings
-- [ ] `gofmt -s` clean
+- [ ] `make check` passes (tidy, vet, golangci-lint, race tests)
+- [ ] `make fmt` leaves no diff
 - [ ] No new `gocyclo` violations (functions ≤ 10)
-- [ ] No new `gosec` findings
-- [ ] `go mod tidy` is clean
+- [ ] No new `gosec` / `govulncheck` findings

@@ -1,0 +1,94 @@
+# GoReleaser v2: builds release archives for every binary under cmd/ when a
+# v* tag is pushed (.github/workflows/release.yml). Try it locally with
+# `make release-snapshot`. The server's container image is built separately
+# by ci/Dockerfile (it bundles the web frontend and SQL migrations).
+# Reference: https://goreleaser.com/customization/
+version: 2
+
+project_name: golang-build
+
+before:
+  hooks:
+    - go mod tidy -diff
+
+# Reproducible: -trimpath, no build-host paths, and the commit timestamp
+# (not the wall clock) as file mtimes. The first build is a YAML anchor the
+# others reuse, overriding only id/main/binary.
+builds:
+  - &build
+    id: server
+    main: ./cmd/server
+    binary: server
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+  - <<: *build
+    id: onboard
+    main: ./cmd/onboard
+    binary: onboard
+  - <<: *build
+    id: loadgen
+    main: ./cmd/loadgen
+    binary: loadgen
+  - <<: *build
+    id: scaffold
+    main: ./cmd/scaffold
+    binary: scaffold
+  - <<: *build
+    id: admin
+    main: ./cmd/admin
+    binary: admin
+  - <<: *build
+    id: devup
+    main: ./cmd/devup
+    binary: devup
+  - <<: *build
+    id: migrate
+    main: ./cmd/migrate
+    binary: migrate
+  - <<: *build
+    id: inspect
+    main: ./cmd/inspect
+    binary: inspect
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+sboms:
+  - artifacts: archive
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge "
+  groups:
+    - title: Dependencies
+      regexp: '(?i)^.*\b(bump|upgrade)\b'
+      order: 2
+    - title: Changes
+      order: 1
+
+release:
+  draft: true
+  prerelease: auto

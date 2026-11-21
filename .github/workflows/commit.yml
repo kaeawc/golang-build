@@ -1,22 +1,30 @@
 name: "Commit"
 
+# PRs (including Dependabot's) and main. Pushes to other branches are
+# covered once they have a PR; run manually from the Actions tab otherwise.
+# deploy.yml starts after this workflow succeeds on main (workflow_run).
 on:
   push:
-    branches:
-      - '*'
+    branches: [main]
   pull_request:
-    branches:
-      - '*'
-  workflow_call:
+  workflow_dispatch:
 
+# Least privilege by default; jobs that need more ask for it.
 permissions:
-  checks: write
-  packages: write
+  contents: read
+
+concurrency:
+  # A new push to a PR supersedes its in-flight run; main runs always finish.
+  group: commit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # Dev tools are pinned in tools/go.mod; see the Makefile.
+  TOOL: go tool -modfile=tools/go.mod
 
 jobs:
   compile-binary:
     runs-on: ubuntu-latest
-
     steps:
       - name: "Git Checkout"
         uses: actions/checkout@v7
@@ -26,28 +34,72 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: "Compile Go binary"
-        run: go build cmd/server/main.go
+      - name: "Compile every binary"
+        run: make build
 
   build-image:
     runs-on: ubuntu-latest
     needs:
       - compile-binary
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      # Only main publishes; every other ref just proves the image builds.
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - name: "Git Checkout"
         uses: actions/checkout@v7
 
-      - name: "Log in to GitHub Docker registry"
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v4
 
-      - name: "Build Docker image"
-        run: docker build -f ci/Dockerfile -t ghcr.io/${{ github.repository_owner }}/golang-build:latest .
+      - name: "Log in to GitHub Container Registry"
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Push Docker image"
-        run: docker push ghcr.io/${{ github.repository_owner }}/golang-build:latest
+      - name: "Image metadata"
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+
+      - name: "Build (and push on main)"
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ci/Dockerfile
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: "Attest build provenance"
+        if: env.PUSH == 'true'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - name: "Git Checkout"
         uses: actions/checkout@v7
@@ -56,24 +108,29 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
-      - name: "Install gotestsum"
+      - name: "Run Go tests (race detector + coverage)"
+        run: make test-junit
+
+      - name: "Coverage summary"
+        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
         run: |
-          go install gotest.tools/gotestsum@latest
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $NF}')
+          echo "### Test coverage: ${total}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: "Run Go tests"
-        run: |
-          gotestsum --junitfile junit-report.xml --format standard-verbose ./...
-
-      - name: "Check if test reports were created"
-        id: junit-reports-exist
-        uses: andstor/file-existence-action@v3
+      - name: "Upload coverage profile"
+        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
+        uses: actions/upload-artifact@v7
         with:
-          files: "junit-report.xml"
+          name: coverage
+          path: coverage.out
 
       - name: "Publish Test Report"
         uses: mikepenz/action-junit-report@v6
-        if: steps.junit-reports-exist.outputs.files_exists == 'true'
+        if: ${{ !cancelled() && hashFiles('junit-report.xml') != '' }}
         with:
           report_paths: 'junit-report.xml'
 
@@ -87,14 +144,10 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
-
-      - name: "Install gocyclo"
-        run: |
-          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+          cache-dependency-path: tools/go.sum
 
       - name: "Run gocyclo"
-        run: |
-          gocyclo -over 10 -ignore '_test\.go$' .
+        run: make complexity
 
   static-analysis:
     runs-on: ubuntu-latest
@@ -106,14 +159,31 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
-      - name: "Install golangci-lint v2"
-        run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - name: "Cache golangci-lint analysis"
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ hashFiles('tools/go.sum', '.golangci.yml') }}-${{ github.sha }}
+          restore-keys: golangci-lint-${{ runner.os }}-${{ hashFiles('tools/go.sum', '.golangci.yml') }}-
+
+      - name: "go.mod / go.sum are tidy"
+        run: make tidy-check
+
+      - name: "Formatting (gofumpt + goimports)"
+        run: $TOOL golangci-lint fmt --diff ./...
+
+      - name: "go vet"
+        run: make vet
 
       - name: "Run golangci-lint"
-        run: |
-          golangci-lint run
+        run: make lint
+
+      - name: "Lint workflows (actionlint)"
+        run: make actionlint
 
   check-licenses:
     runs-on: ubuntu-latest
@@ -125,16 +195,41 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
-      - name: "Install go-licenses"
-        run: |
-          go install github.com/google/go-licenses@latest
-
-      - name: "Run go-licenses"
-        run: |
-          go-licenses report ./...
+      - name: "Check dependency licenses"
+        run: make licenses
 
   security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v7
+
+      - name: "Set up Go"
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+
+      - name: "Run gosec"
+        # Excluded rules and their rationale are documented in .golangci.yml.
+        run: $TOOL gosec -exclude=G104,G304,G602,G703,G704 -fmt=junit-xml -out=gosec-report.xml -stdout ./...
+
+      - name: "Publish Security Report"
+        uses: mikepenz/action-junit-report@v6
+        if: ${{ !cancelled() && hashFiles('gosec-report.xml') != '' }}
+        with:
+          report_paths: 'gosec-report.xml'
+
+  vulnerabilities:
     runs-on: ubuntu-latest
     steps:
       - name: "Git Checkout"
@@ -144,41 +239,39 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
-      - name: "Install gosec"
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: "Run govulncheck"
+        run: make vuln
 
-      - name: "Run gosec"
-        run: |
-          # Excluded rules:
-          #   G104 — best-effort cleanup of os.Remove etc. is documented and intentional
-          #   G304 — vfs/fsutil/cacheutil take filesystem paths as input by design
-          #   G602 — false positive on byte conversion of UintN(256)
-          #   G703 — same path-as-input rationale as G304
-          #   G704 — httpx is an HTTP client library; URL is caller input by design
-          gosec -exclude=G104,G304,G602,G703,G704 -fmt=junit-xml -out=gosec-report.xml -stdout ./...
+  release-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@v7
 
-      - name: "Check if security report was created"
-        id: gosec-report-exists
-        uses: andstor/file-existence-action@v3
+      - name: "Validate .goreleaser.yaml"
+        uses: goreleaser/goreleaser-action@v7
         with:
-          files: "gosec-report.xml"
-
-      - name: "Publish Security Report"
-        uses: mikepenz/action-junit-report@v6
-        if: steps.gosec-report-exists.outputs.files_exists == 'true'
-        with:
-          report_paths: 'gosec-report.xml'
+          version: '~> v2'
+          args: check
 
   codeql-analysis:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       actions: read
       security-events: write
     steps:
       - name: "Git Checkout"
         uses: actions/checkout@v7
+
+      - name: "Set up Go"
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
 
       - name: "Initialize CodeQL"
         uses: github/codeql-action/init@v4
