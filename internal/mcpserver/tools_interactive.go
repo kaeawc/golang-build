@@ -146,27 +146,12 @@ func (a *app) connectCalendar(_ context.Context, req *mcp.CallToolRequest, in Ca
 	}
 	answer, answered := req.Params.InputResponses[inputCalendar]
 	if !answered {
-		if !supportsElicitation(req.ClientCapabilities(), "url") {
-			return nil, zero, fmt.Errorf("%w (url mode)", errNeedsElicitation)
-		}
-		id := a.IDs.Next()
-		state, err := a.state.issue(ToolConnectCalendar, id)
-		if err != nil {
-			return nil, zero, err
-		}
-		return &mcp.CallToolResult{
-			InputRequests: mcp.InputRequestMap{inputCalendar: &mcp.ElicitParams{
-				Mode:          "url",
-				Message:       "Authorize access to your " + provider + " calendar in the browser.",
-				URL:           a.consentURL(id),
-				ElicitationID: id,
-			}},
-			RequestState: state,
-		}, zero, nil
+		res, err := a.askCalendarConsent(req, provider)
+		return res, zero, err
 	}
 
-	// The elicitation ID travels inside the signed state, so the server
-	// needs no per-request storage and any replica can handle the retry.
+	// The elicitation ID travels inside the signed state, so any replica can
+	// verify the retry; only the consent bookkeeping is stateful.
 	id, err := a.state.open(req.Params.RequestState, ToolConnectCalendar)
 	if err != nil {
 		return nil, zero, &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: err.Error()}
@@ -174,10 +159,39 @@ func (a *app) connectCalendar(_ context.Context, req *mcp.CallToolRequest, in Ca
 	if res, _ := answer.(*mcp.ElicitResult); res == nil || res.Action != "accept" {
 		return nil, CalendarOutput{Provider: provider, ElicitationID: id}, nil
 	}
-	if a.Consent != nil && !a.Consent.Completed(id) {
-		return nil, zero, fmt.Errorf("consent %s has not been completed in the browser yet; finish it and call connect_calendar again", id)
+	// Consume makes the completed consent single-use: replaying this
+	// (still validly signed) state cannot connect a second time.
+	if a.Consent != nil && !a.Consent.Consume(id) {
+		return nil, zero, fmt.Errorf("consent %s is not completed (or was already used); finish it in the browser and call connect_calendar again", id)
 	}
 	return nil, CalendarOutput{Connected: true, Provider: provider, ElicitationID: id}, nil
+}
+
+// askCalendarConsent issues the URL-mode input request and registers its ID
+// with the consent store, so only IDs minted here can be completed.
+func (a *app) askCalendarConsent(req *mcp.CallToolRequest, provider string) (*mcp.CallToolResult, error) {
+	if !supportsElicitation(req.ClientCapabilities(), "url") {
+		return nil, fmt.Errorf("%w (url mode)", errNeedsElicitation)
+	}
+	id := a.IDs.Next()
+	if a.Consent != nil {
+		if err := a.Consent.Begin(id); err != nil {
+			return nil, err
+		}
+	}
+	state, err := a.state.issue(ToolConnectCalendar, id)
+	if err != nil {
+		return nil, err
+	}
+	return &mcp.CallToolResult{
+		InputRequests: mcp.InputRequestMap{inputCalendar: &mcp.ElicitParams{
+			Mode:          "url",
+			Message:       "Authorize access to your " + provider + " calendar in the browser.",
+			URL:           a.consentURL(id),
+			ElicitationID: id,
+		}},
+		RequestState: state,
+	}, nil
 }
 
 func (a *app) consentURL(id string) string {

@@ -81,7 +81,7 @@ func serve(ctx context.Context, cfg config, log *slog.Logger, ln net.Listener) e
 	}
 	var consent *mcpserver.MemoryConsent
 	if cfg.transport == transportHTTP {
-		consent = mcpserver.NewMemoryConsent()
+		consent = mcpserver.NewMemoryConsent(clock.Default)
 		deps.Consent, deps.ConsentURL = consent, cfg.consentBaseURL()
 	}
 	server := mcpserver.New(deps)

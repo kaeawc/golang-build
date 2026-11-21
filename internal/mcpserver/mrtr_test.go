@@ -172,14 +172,14 @@ func TestConnectCalendarURLElicitation(t *testing.T) {
 		wantErr       string
 	}{
 		{name: "completed", visit: true, caps: urlCaps, wantConnected: true},
-		{name: "accepted but not completed", visit: false, caps: urlCaps, wantErr: "not been completed"},
+		{name: "accepted but not completed", visit: false, caps: urlCaps, wantErr: "not completed"},
 		{name: "form-only client", caps: &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{Form: &mcp.FormElicitationCapabilities{}}}, wantErr: "url mode"},
 	}
 	for _, v := range versions {
 		for _, tt := range tests {
 			t.Run(v+"/"+tt.name, func(t *testing.T) {
 				t.Parallel()
-				consent := NewMemoryConsent()
+				consent := NewMemoryConsent(nil)
 				rec := &elicitRecorder{answer: func(p *mcp.ElicitParams) *mcp.ElicitResult {
 					if tt.visit {
 						consent.Complete(p.ElicitationID)

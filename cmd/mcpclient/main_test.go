@@ -99,7 +99,7 @@ func TestDemoInMemory(t *testing.T) {
 // including -token handling and a URL-mode consent page visit.
 func TestRunAgainstHTTP(t *testing.T) {
 	t.Parallel()
-	consent := mcpserver.NewMemoryConsent()
+	consent := mcpserver.NewMemoryConsent(nil)
 	ts := httptest.NewUnstartedServer(nil)
 	base := "http://" + ts.Listener.Addr().String()
 	server := mcpserver.New(mcpserver.Deps{

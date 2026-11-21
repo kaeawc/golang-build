@@ -31,7 +31,7 @@ type httpFixture struct {
 // When withAuth is set, bearer tokens are required and verified.
 func newHTTPFixture(t *testing.T, withAuth bool) *httpFixture {
 	t.Helper()
-	f := &httpFixture{store: NewMemoryStore(DemoUsers...), issuer: tokens.NewHMAC256([]byte("test-secret")), consent: NewMemoryConsent()}
+	f := &httpFixture{store: NewMemoryStore(DemoUsers...), issuer: tokens.NewHMAC256([]byte("test-secret")), consent: NewMemoryConsent(nil)}
 	ts := httptest.NewUnstartedServer(nil)
 	f.base = "http://" + ts.Listener.Addr().String()
 	f.url = f.base + PathMCP
@@ -376,18 +376,38 @@ func TestHTTPBrowserProtections(t *testing.T) {
 func TestHTTPAuxEndpoints(t *testing.T) {
 	t.Parallel()
 	f := newHTTPFixture(t, false)
-	for path, want := range map[string]int{"/healthz": 200, "/readyz": 200, PathConsent + "?id=abc": 200, PathConsent: 400} {
-		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, f.base+path, nil)
+	if err := f.consent.Begin("issued"); err != nil {
+		t.Fatal(err)
+	}
+	// Ordered: the second visit to "issued" still succeeds (completion is
+	// idempotent until the tool consumes it).
+	steps := []struct {
+		path string
+		want int
+	}{
+		{"/healthz", 200},
+		{"/readyz", 200},
+		{PathConsent, 400},
+		{PathConsent + "?id=" + strings.Repeat("x", 200), 400},
+		{PathConsent + "?id=never-issued", 404},
+		{PathConsent + "?id=issued", 200},
+		{PathConsent + "?id=issued", 200},
+	}
+	for _, s := range steps {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, f.base+s.path, nil)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
-		if resp.StatusCode != want {
-			t.Errorf("GET %s = %d, want %d", path, resp.StatusCode, want)
+		if resp.StatusCode != s.want {
+			t.Errorf("GET %s = %d, want %d", s.path, resp.StatusCode, s.want)
 		}
 	}
-	if !f.consent.Completed("abc") {
+	if n := f.consent.Len(); n != 1 {
+		t.Errorf("store holds %d entries; unknown ids must not be stored", n)
+	}
+	if !f.consent.Consume("issued") {
 		t.Error("consent page did not record completion")
 	}
 }

@@ -82,7 +82,7 @@ client over `mcp.NewInMemoryTransports`.
 | Prompts: arguments, multi-message, embedded resource | Server › Prompts | `prompts.go` (`summarize_user`, `onboarding_email` with user/assistant/user turns) | `TestPrompts` |
 | Completion (prompt args + template params) | Utilities › Completion | `completion.go` table of completers | `TestCompletion` |
 | Multi round-trip requests, form elicitation | SEP-2322; Client › Elicitation | `delete_user` returns `InputRequests` + HMAC-signed `RequestState` | `TestDeleteUserConfirmation` (both versions), `TestDeleteUserManualRoundTrip` |
-| URL-mode elicitation | Elicitation › URL mode | `connect_calendar` + `/consent` page + `ConsentStore` | `TestConnectCalendarURLElicitation`, `cmd/mcpclient` `TestRunAgainstHTTP` |
+| URL-mode elicitation | Elicitation › URL mode | `connect_calendar` + `/consent` page + `ConsentStore` | `TestConnectCalendarURLElicitation`, `TestConnectCalendarConsentLifecycle`, `TestMemoryConsent`, `TestHTTPAuxEndpoints`, `cmd/mcpclient` `TestRunAgainstHTTP` |
 | Legacy-client path for MRTR | SEP-2322 back-compat | SDK `serverMultiRoundTripMiddleware` turns `InputRequests` into `elicitation/create` | the `2025-11-25` rows of the two tests above |
 | Progress notifications | Utilities › Progress | `export_users` | `TestExportProgress` (synctest, exact virtual timing) |
 | Cancellation | Utilities › Cancellation | `export_users` honours `ctx`; HTTP `PropagateRequestCancellation` | `TestExportCancellation` (synctest) |
@@ -246,10 +246,27 @@ least twelve months, but this server builds nothing new on them:
   If the budget runs out, the remaining connections are force-closed. This
   usually means a client reconnected just before the listener closed:
   net/http only reaps such new connections after 5s.
-- **The `/consent` page is a stand-in for an OAuth provider:** visiting it
-  marks the elicitation as complete. Over stdio there is no HTTP server, so
-  the URL points at `calendar.example.com` and `accept` is taken at face
-  value.
+- **The `/consent` page is a stand-in for an OAuth provider.** The
+  `ConsentStore` (`MemoryConsent`) tracks each flow in three steps:
+  1. `connect_calendar` calls `Begin(id)` when it issues the URL
+     elicitation.
+  2. The page calls `Complete(id)`.
+  3. The tool's retry calls `Consume(id)`.
+
+  The rules that follow from this:
+  - Unknown or expired IDs get a 404, and nothing is stored, so
+    unauthenticated callers cannot grow the store.
+  - Entries expire after `requestStateTTL` (10 minutes), measured on the
+    injected `clock.Clock`. Eviction is lazy: an expired entry is removed
+    when it is looked up, and all expired entries are swept when the
+    10,000-entry cap is reached. Every operation stays O(1) and memory
+    stays bounded.
+  - A completed consent can be consumed once, so replaying the
+    still-validly-signed `requestState` cannot connect again.
+  - `MemoryConsent` is per process. Multi-instance deployments need a
+    shared store, such as Valkey with a TTL.
+  - Over stdio there is no HTTP server and no store: the URL points at
+    `calendar.example.com`, and `accept` is taken at face value.
 - **Completion and the report helpers read every user.** That is fine for
   the demo directory. A large table needs `LIKE`-prefix queries instead.
 
