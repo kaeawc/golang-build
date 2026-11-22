@@ -134,6 +134,8 @@ The TUIs run without a database:
 | `make test` | Run tests with the race detector and coverage |
 | `make test-short` | Run tests without the race detector (fast inner loop) |
 | `make cover` | Open the HTML coverage report |
+| `make fuzz` | Run every fuzz target for FUZZTIME (default 30s) each |
+| `make bench` / `make bench-compare` | Run benchmarks (BENCH regexp, PKG, COUNT, BENCHTIME) / compare two runs with benchstat |
 | `make fmt` | Format code (gofumpt + goimports) |
 | `make lint` / `make lint-fix` | Run golangci-lint / and apply automatic fixes |
 | `make vuln` | Check dependencies for known vulnerabilities |
@@ -143,6 +145,17 @@ The TUIs run without a database:
 | `make release-snapshot` | Build a local goreleaser snapshot into dist/ (needs goreleaser) |
 | `make rename` | Make the template yours: make rename MODULE=github.com/you/app [NAME=app] |
 | `make rename-test` | Rename a scratch copy to a throwaway module, then lint, test and build it |
+
+## Testing
+
+`make test` runs the suite with the race detector. Fuzz targets sit next to
+the parsers they cover (`Fuzz*` in `_test.go`), and their seed corpora and
+any committed failing inputs replay as part of `make test`. `make fuzz
+FUZZTIME=10s` fuzzes every target, and a nightly workflow fuzzes each one
+for 5 minutes. `make bench` runs the `b.Loop()` benchmarks.
+`make bench-compare OLD=old.txt NEW=new.txt` diffs two runs with benchstat.
+[docs/testing.md](docs/testing.md) covers how to write a fuzz target or
+benchmark and how to read the results.
 
 ## CI and releases
 
@@ -156,6 +169,9 @@ The TUIs run without a database:
   (`make rename-test`: renames a scratch copy to a throwaway module, checks
   nothing names the old one, then formats, lints, tests and builds it) and
   `codeql-analysis`. The Go version comes from `go.mod`.
+- **`fuzz.yml`** fuzzes every `Fuzz*` target for 5 minutes each night (or
+  on demand from the Actions tab), one job per target, and uploads the
+  failing input as an artifact. See [docs/testing.md](docs/testing.md).
 - **`deploy.yml`** deploys `main` to Fly.io once `commit.yml` passes on it,
   then smoke-tests `/healthz`.
 - **`preview.yml`**: a maintainer comments `preview` (or `preview 1h`) on a
