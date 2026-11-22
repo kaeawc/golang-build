@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -12,7 +15,9 @@ import (
 	"time"
 
 	"github.com/kaeawc/golang-build/internal/db"
+	"github.com/kaeawc/golang-build/internal/env"
 	"github.com/kaeawc/golang-build/internal/handlers"
+	"github.com/kaeawc/golang-build/internal/httpmw"
 	"github.com/kaeawc/golang-build/internal/middleware"
 )
 
@@ -44,7 +49,63 @@ func (testPinger) Ping(context.Context) error { return nil }
 
 // newTestRouter builds the real routing table with fake dependencies.
 func newTestRouter() *http.ServeMux {
-	return buildRouter(testPinger{}, &testQuerier{}, &testCache{})
+	return buildRouter(slog.New(slog.DiscardHandler), testPinger{}, &testQuerier{}, &testCache{})
+}
+
+// TestRunReturnsConfigErrors checks run reports bad configuration as an
+// error (so main's deferred cleanups and single exit point apply)
+// instead of exiting the process.
+func TestRunReturnsConfigErrors(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	tests := map[string]struct {
+		vars env.Map
+		want string
+	}{
+		"missing DATABASE_URL": {env.Map{}, "DATABASE_URL is required"},
+		"bad LOG_LEVEL":        {env.Map{"DATABASE_URL": "postgres://x", "LOG_LEVEL": "loud"}, "LOG_LEVEL"},
+		"missing VALKEY_ADDR":  {env.Map{"DATABASE_URL": "postgres://x"}, "VALKEY_ADDR is required"},
+		"public DEBUG_ADDR":    {env.Map{"DATABASE_URL": "postgres://x", "DEBUG_ADDR": ":6060"}, "DEBUG_ADDR"},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := run(t.Context(), tt.vars, io.Discard)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("run() = %v, want error containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestStoppedBySignal(t *testing.T) {
+	live := t.Context()
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	wrapped := fmt.Errorf("boot: %w", context.Canceled)
+	for _, tt := range []struct {
+		name string
+		ctx  context.Context
+		err  error
+		want bool
+	}{
+		{"signal during boot", canceled, wrapped, true},
+		{"no error", canceled, nil, false},
+		{"real failure after signal", canceled, errors.New("listen: address in use"), false},
+		{"canceled error without a signal", live, wrapped, false},
+	} {
+		if got := stoppedBySignal(tt.ctx, tt.err); got != tt.want {
+			t.Errorf("%s: stoppedBySignal = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestAPIResponsesCarryRequestID(t *testing.T) {
+	rr := httptest.NewRecorder()
+	newTestRouter().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/users", nil))
+	if rr.Header().Get(httpmw.HeaderRequestID) == "" {
+		t.Errorf("missing %s on /api response", httpmw.HeaderRequestID)
+	}
 }
 
 func TestHealthz(t *testing.T) {

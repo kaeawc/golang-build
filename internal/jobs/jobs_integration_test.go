@@ -3,8 +3,13 @@
 package jobs_test
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
+	"log/slog"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +37,54 @@ func TestMain(m *testing.M) {
 // waitTimeout bounds how long a test waits for River to work a job.
 const waitTimeout = 30 * time.Second
 
+// logSink collects JSON slog records from River and the workers so tests
+// can assert on what the jobs package logs. Safe for concurrent use.
+type logSink struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *logSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *logSink) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+// newLogger returns a logger writing JSON records into a fresh logSink.
+func newLogger() (*slog.Logger, *logSink) {
+	sink := &logSink{}
+	return slog.New(slog.NewJSONHandler(sink, nil)), sink
+}
+
+// has reports whether a record with msg carries every attr in want.
+func (s *logSink) has(msg string, want map[string]any) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sc := bufio.NewScanner(bytes.NewReader(s.buf.Bytes()))
+	for sc.Scan() {
+		var rec map[string]any
+		if json.Unmarshal(sc.Bytes(), &rec) != nil || rec["msg"] != msg {
+			continue
+		}
+		match := true
+		for k, v := range want {
+			if rec[k] != v {
+				match = false
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
 // newMigratedPool returns a pool on a fresh database with River's schema.
 func newMigratedPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -44,9 +97,9 @@ func newMigratedPool(t *testing.T) *pgxpool.Pool {
 
 // startClient starts a River client and stops it (via jobs.Stop) when the
 // test ends.
-func startClient(t *testing.T, pool *pgxpool.Pool, workers *river.Workers) *river.Client[pgx.Tx] {
+func startClient(t *testing.T, pool *pgxpool.Pool, workers *river.Workers, log *slog.Logger) *river.Client[pgx.Tx] {
 	t.Helper()
-	client, err := jobs.NewClient(pool, workers)
+	client, err := jobs.NewClient(pool, workers, log)
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -57,7 +110,7 @@ func startClient(t *testing.T, pool *pgxpool.Pool, workers *river.Workers) *rive
 		// t.Context is already cancelled during cleanup.
 		ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
 		defer cancel()
-		if err := jobs.Stop(client)(ctx); err != nil {
+		if err := jobs.Stop(client, log)(ctx); err != nil {
 			t.Errorf("Stop: %v", err)
 		}
 	})
@@ -108,7 +161,8 @@ func TestMigrateFailsWithoutDatabase(t *testing.T) {
 func TestPingJobRuns(t *testing.T) {
 	t.Parallel()
 	pool := newMigratedPool(t)
-	client := startClient(t, pool, jobs.NewWorkers())
+	log, sink := newLogger()
+	client := startClient(t, pool, jobs.NewWorkers(log), log)
 	events, cancel := client.Subscribe(river.EventKindJobCompleted, river.EventKindJobFailed)
 	defer cancel()
 
@@ -128,12 +182,17 @@ func TestPingJobRuns(t *testing.T) {
 	if row.State != rivertype.JobStateCompleted || row.Kind != "ping" || row.Queue != river.QueueDefault {
 		t.Errorf("job row = state %s kind %s queue %s", row.State, row.Kind, row.Queue)
 	}
+	// The worker logs through the injected logger, with the job's ID.
+	if !sink.has("jobs.ping", map[string]any{"message": "hello", "job_id": float64(res.Job.ID)}) {
+		t.Errorf("no jobs.ping record for job %d in logs:\n%s", res.Job.ID, sink.String())
+	}
 }
 
 func TestPingJobRunsOnInteractiveQueue(t *testing.T) {
 	t.Parallel()
 	pool := newMigratedPool(t)
-	client := startClient(t, pool, jobs.NewWorkers())
+	log, _ := newLogger()
+	client := startClient(t, pool, jobs.NewWorkers(log), log)
 	events, cancel := client.Subscribe(river.EventKindJobCompleted, river.EventKindJobFailed)
 	defer cancel()
 
@@ -153,7 +212,8 @@ func TestPingInsertsAreUnique(t *testing.T) {
 	ctx := t.Context()
 	// An insert-only client: nothing works the jobs, so both inserts see
 	// the first one still available.
-	client, err := jobs.NewClient(pool, jobs.NewWorkers())
+	log, _ := newLogger()
+	client, err := jobs.NewClient(pool, jobs.NewWorkers(log), log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +269,8 @@ func TestStopEscalatesToCancel(t *testing.T) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, w)
 
-	client, err := jobs.NewClient(pool, workers)
+	log, sink := newLogger()
+	client, err := jobs.NewClient(pool, workers, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,8 +296,11 @@ func TestStopEscalatesToCancel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), jobs.StopGracePeriod+waitTimeout)
 	defer cancel()
 	start := time.Now()
-	if err := jobs.Stop(client)(ctx); err != nil {
+	if err := jobs.Stop(client, log)(ctx); err != nil {
 		t.Fatalf("Stop: %v", err)
+	}
+	if !sink.has("river graceful stop timed out; cancelling in-flight jobs", map[string]any{"level": "WARN"}) {
+		t.Errorf("no escalation warning in logs:\n%s", sink.String())
 	}
 	if elapsed := time.Since(start); elapsed < jobs.StopGracePeriod {
 		t.Errorf("Stop returned after %s, before the %s grace period", elapsed, jobs.StopGracePeriod)

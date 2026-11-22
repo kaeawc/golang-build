@@ -27,3 +27,27 @@ Set via `flyctl secrets set -a <app>`:
 - `DATABASE_URL` (pooled)
 - `DATABASE_URL_DIRECT` (direct, for migrations)
 - `VALKEY_ADDR`
+
+## Logging
+
+The server logs with `log/slog` to stderr. Optional settings (plain env, not secrets):
+
+- `LOG_LEVEL`: `debug`, `info` (default), `warn` or `error`.
+- `LOG_FORMAT`: `json` or `text`. Defaults to `text` when `ENVIRONMENT=development` and `json` everywhere else.
+
+Each `/api` request gets a request-scoped logger carrying `request_id` (from `X-Request-ID`, or generated and echoed back), `method` and `path`. Handlers retrieve it with `logger.FromContext(r.Context())`.
+
+## Profiling
+
+`DEBUG_ADDR` (e.g. `127.0.0.1:6060`) serves `/debug/pprof/*` on a separate listener; unset (the default) disables it. Non-loopback hosts are refused unless `DEBUG_ALLOW_NON_LOOPBACK=true`.
+
+On Fly, a loopback listener can't be reached from outside the Machine: `fly proxy` tunnels to the Machine's private 6PN address, not to its 127.0.0.1, and the distroless image has no shell for `fly ssh console`. To profile a Machine, bind the listener to its private address for the session and proxy to it:
+
+```bash
+flyctl secrets set -a <app> DEBUG_ADDR=fly-local-6pn:6060 DEBUG_ALLOW_NON_LOOPBACK=true
+fly proxy 6060:6060 -a <app>
+curl -o prod.pprof 'http://127.0.0.1:6060/debug/pprof/profile?seconds=60'
+flyctl secrets unset -a <app> DEBUG_ADDR DEBUG_ALLOW_NON_LOOPBACK
+```
+
+The 6PN address is private to the organization's WireGuard network, but every app and member in the organization can reach it, so unset the variables when you're done. (This procedure hasn't been exercised against a live Machine yet.) The server is built with PGO from `cmd/server/default.pgo`; see [docs/pgo.md](../pgo.md).

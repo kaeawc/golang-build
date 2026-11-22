@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -48,8 +48,11 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-func NewClient(pool *pgxpool.Pool, workers *river.Workers) (*river.Client[pgx.Tx], error) {
+// NewClient builds the River client. River's own logs (job errors,
+// leadership, maintenance) go to log.
+func NewClient(pool *pgxpool.Pool, workers *river.Workers, log *slog.Logger) (*river.Client[pgx.Tx], error) {
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{
+		Logger:               log,
 		JobTimeout:           JobTimeout,
 		RescueStuckJobsAfter: RescueStuckJobsAfter,
 		Queues: map[string]river.QueueConfig{
@@ -66,7 +69,7 @@ func NewClient(pool *pgxpool.Pool, workers *river.Workers) (*river.Client[pgx.Tx
 // grace period elapses. The returned function is suitable as a shutdown hook:
 // it never returns nil-but-leaks-goroutines the way bare Stop can when a
 // worker overruns the hook timeout.
-func Stop(client *river.Client[pgx.Tx]) func(context.Context) error {
+func Stop(client *river.Client[pgx.Tx], log *slog.Logger) func(context.Context) error {
 	return func(ctx context.Context) error {
 		graceCtx, cancel := context.WithTimeout(ctx, StopGracePeriod)
 		defer cancel()
@@ -75,7 +78,7 @@ func Stop(client *river.Client[pgx.Tx]) func(context.Context) error {
 		} else if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 			return fmt.Errorf("river stop: %w", err)
 		}
-		log.Printf("river: graceful stop exceeded %s; cancelling in-flight jobs", StopGracePeriod)
+		log.WarnContext(ctx, "river graceful stop timed out; cancelling in-flight jobs", "grace", StopGracePeriod)
 		if err := client.StopAndCancel(ctx); err != nil {
 			return fmt.Errorf("river stop-and-cancel: %w", err)
 		}
