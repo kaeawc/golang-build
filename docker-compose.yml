@@ -1,4 +1,7 @@
 version: "3.9"
+# Fixes the container names (golang-build-postgres-1, ...) that
+# scripts/dev.sh waits on, whatever the checkout directory is called.
+name: golang-build
 
 services:
   postgres:

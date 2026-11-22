@@ -144,13 +144,26 @@ release-check: ## Run the release readiness checklist
 release-snapshot: ## Build a local goreleaser snapshot into dist/ (needs goreleaser)
 	goreleaser release --snapshot --clean
 
+##@ Template
+
+.PHONY: rename
+# MODULE and NAME count only on the command line: shells often export NAME
+# (WSL sets it to the hostname), which must not silently rename the project.
+rename: ## Make the template yours: make rename MODULE=github.com/you/app [NAME=app]
+	@test "$(origin MODULE)" = "command line" || { echo "usage: make rename MODULE=github.com/you/app [NAME=app]" >&2; exit 2; }
+	$(GO) run ./scripts/rename-module -module '$(MODULE)' $(if $(filter command line,$(origin NAME)),-name '$(NAME)')
+
+.PHONY: rename-test
+rename-test: ## Rename a scratch copy to a throwaway module, then lint, test and build it
+	bash scripts/rename-test.sh
+
 ##@ Aggregates
 
 .PHONY: check
 check: tidy-check vet lint test ## Fast pre-push gate
 
 .PHONY: ci
-ci: tidy-check vet lint complexity security vuln licenses actionlint test ## Everything CI runs (except CodeQL and the image build)
+ci: tidy-check vet lint complexity security vuln licenses actionlint test rename-test ## Everything CI runs (except CodeQL and the image build)
 
 .PHONY: clean
 clean: ## Remove build and test artifacts
