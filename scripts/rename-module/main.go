@@ -88,15 +88,7 @@ func run(ctx context.Context, opts options, out io.Writer) error {
 		}
 	}
 
-	fmt.Fprintf(out, "Module: %s -> %s\nName:   %s -> %s\n", plan.oldModule, plan.newModule, plan.oldName, plan.newName)
-	verb := "Rewrote"
-	if opts.dryRun {
-		verb = "Would rewrite"
-	}
-	fmt.Fprintf(out, "%s %d files:\n", verb, len(changes))
-	for _, c := range changes {
-		fmt.Fprintf(out, "  %-50s %d replacements\n", c.path, c.count)
-	}
+	plan.report(out, changes, opts.dryRun)
 	if opts.dryRun {
 		return nil
 	}
@@ -104,6 +96,21 @@ func run(ctx context.Context, opts options, out io.Writer) error {
 		return err
 	}
 	return finish(ctx, opts, out)
+}
+
+func (p *plan) report(out io.Writer, changes []change, dryRun bool) {
+	fmt.Fprintf(out, "Module: %s -> %s\nName:   %s -> %s\n", p.oldModule, p.newModule, p.oldName, p.newName)
+	verb := "Rewrote"
+	if dryRun {
+		verb = "Would rewrite"
+	}
+	fmt.Fprintf(out, "%s %d files (replacements per file):\n", verb, len(changes))
+	for _, c := range changes {
+		fmt.Fprintf(out, "  %-50s %d\n", c.path, c.count)
+	}
+	if p.oldOwner != "" && p.newOwner == "" {
+		fmt.Fprintf(out, "Note: %s is not on github.com, so .github/CODEOWNERS still names @%s; edit it by hand.\n", p.newModule, p.oldOwner)
+	}
 }
 
 // finish tidies both modules and runs the pre-push gate in the renamed tree.

@@ -144,6 +144,9 @@ func TestRunEndToEnd(t *testing.T) {
 	if !strings.Contains(out.String(), "main.go") || !strings.Contains(out.String(), "-> example.com/acme/widget") {
 		t.Errorf("output does not list changes:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "CODEOWNERS still names @kaeawc") {
+		t.Errorf("output does not flag CODEOWNERS for a non-GitHub module:\n%s", out.String())
+	}
 
 	// Idempotent: the same arguments again change nothing, even uncommitted.
 	out.Reset()
