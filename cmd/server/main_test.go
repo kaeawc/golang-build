@@ -66,6 +66,7 @@ func TestRunReturnsConfigErrors(t *testing.T) {
 		"missing DATABASE_URL": {env.Map{}, "DATABASE_URL is required"},
 		"bad LOG_LEVEL":        {env.Map{"DATABASE_URL": "postgres://x", "LOG_LEVEL": "loud"}, "LOG_LEVEL"},
 		"missing VALKEY_ADDR":  {env.Map{"DATABASE_URL": "postgres://x"}, "VALKEY_ADDR is required"},
+		"public DEBUG_ADDR":    {env.Map{"DATABASE_URL": "postgres://x", "DEBUG_ADDR": ":6060"}, "DEBUG_ADDR"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
