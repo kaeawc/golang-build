@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kaeawc/golang-build/internal/tui"
 )
@@ -84,7 +84,7 @@ func durationItems() []tui.PickerItem {
 func (m model) Init() tea.Cmd { return tui.PhaseInit(m.phase) }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if cmd := tui.HandleGlobal(msg); cmd != nil {
+	if cmd := tui.HandleGlobal(msg, m.phase); cmd != nil {
 		if m.cancel != nil {
 			m.cancel()
 		}
@@ -139,9 +139,6 @@ func (m model) onDashboardDone(msg tui.LiveDoneMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
-	if m.err != nil {
-		return tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n"
-	}
-	return m.phase.View()
+func (m model) View() tea.View {
+	return tui.RootView(m.err, m.phase)
 }
