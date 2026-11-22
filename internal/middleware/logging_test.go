@@ -100,3 +100,90 @@ func TestRecoverRepanicsErrAbortHandler(t *testing.T) {
 	}()
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 }
+
+// Gzip sits inside Recover in the server chain: a panic must still give a
+// clean 500 (no gzip bytes committing a 200), and the logged stack must
+// reach the panicking handler.
+func TestRecoverInsideGzipReturns500WithOriginalStack(t *testing.T) {
+	var buf bytes.Buffer
+	base := slog.New(slog.NewJSONHandler(&buf, nil))
+	handler := Logging(base)(Recover(Gzip(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panicInHandler()
+	}))))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rr.Code)
+	}
+	if got := rr.Header().Get("Content-Encoding"); got != "" {
+		t.Errorf("Content-Encoding = %q on the 500, want none", got)
+	}
+	if got := rr.Body.String(); got != "Internal Server Error\n" {
+		t.Errorf("body = %q", got)
+	}
+	recs := decodeRecords(t, &buf)
+	if len(recs) != 2 {
+		t.Fatalf("got %d records, want 2: %s", len(recs), buf.String())
+	}
+	if stack, _ := recs[0]["stack"].(string); !strings.Contains(stack, "panicInHandler") {
+		t.Errorf("panic stack lost the handler frame:\n%s", stack)
+	}
+	if recs[1]["status"] != float64(http.StatusInternalServerError) {
+		t.Errorf("access status = %v, want 500", recs[1]["status"])
+	}
+}
+
+//go:noinline
+func panicInHandler() { panic("boom") }
+
+func TestLoggingRecordsAbortedRequests(t *testing.T) {
+	var buf bytes.Buffer
+	base := slog.New(slog.NewJSONHandler(&buf, nil))
+	handler := Logging(base)(Recover(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic(http.ErrAbortHandler)
+	})))
+	func() {
+		defer func() { _ = recover() }()
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/stream", nil))
+	}()
+	recs := decodeRecords(t, &buf)
+	if len(recs) != 1 || recs[0]["msg"] != "http request" || recs[0]["aborted"] != true {
+		t.Errorf("records = %v, want one access line with aborted=true", recs)
+	}
+}
+
+func TestLoggingRecordsFinalStatusAndQuery(t *testing.T) {
+	var buf bytes.Buffer
+	base := slog.New(slog.NewJSONHandler(&buf, nil))
+	handler := Logging(base)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusEarlyHints)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x?page=2", nil))
+	recs := decodeRecords(t, &buf)
+	if len(recs) != 1 {
+		t.Fatalf("records = %v", recs)
+	}
+	if recs[0]["status"] != float64(http.StatusAccepted) || recs[0]["query"] != "page=2" || recs[0]["aborted"] != nil {
+		t.Errorf("access record = %v, want status 202, query page=2, not aborted", recs[0])
+	}
+}
+
+func TestAccessWriterForwardsFlush(t *testing.T) {
+	rr := httptest.NewRecorder()
+	Logging(slog.New(slog.DiscardHandler))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if err := http.NewResponseController(w).Flush(); err != nil {
+			t.Errorf("Flush: %v", err)
+		}
+		if _, ok := w.(http.Flusher); !ok {
+			t.Error("writer does not implement http.Flusher")
+		}
+	})).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	if !rr.Flushed {
+		t.Error("flush did not reach the underlying writer")
+	}
+}

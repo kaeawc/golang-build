@@ -62,11 +62,17 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 		log.Error("shutdown hook failed", "hook", name, "err", err)
 	})
 	defer func() {
-		// A no-op when the server's OnShutdown already ran it; otherwise
-		// releases whatever boot acquired before failing.
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		// The only place hooks run: after the HTTP server has drained
+		// (srv.Run returned) or after boot failed part-way. Its own budget,
+		// separate from the HTTP drain, so a slow drain cannot starve the
+		// River/pool/cache hooks.
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
 		defer cancel()
 		err = errors.Join(err, coord.Shutdown(shutdownCtx))
+		if stoppedBySignal(ctx, err) {
+			log.Info("stopped during startup", "err", err)
+			err = nil
+		}
 	}()
 
 	pool, c, err := bootResources(ctx, cfg)
@@ -83,7 +89,9 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 	if err != nil {
 		return fmt.Errorf("river client: %w", err)
 	}
-	if err := riverClient.Start(ctx); err != nil {
+	// River treats cancellation of Start's ctx as an abrupt stop that
+	// cancels running jobs; the "river" hook does the graceful stop.
+	if err := riverClient.Start(context.WithoutCancel(ctx)); err != nil {
 		return fmt.Errorf("river start: %w", err)
 	}
 	coord.Register("river", jobs.Stop(riverClient, log))
@@ -102,7 +110,6 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
-		OnShutdown:   coord.Shutdown,
 		Signals:      []os.Signal{}, // ctx carries SIGINT/SIGTERM (see main)
 	})
 	if err := srv.Run(ctx); err != nil {
@@ -110,6 +117,12 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 	}
 	log.Info("server stopped")
 	return nil
+}
+
+// stoppedBySignal reports whether err is only the cancellation of ctx
+// (SIGINT/SIGTERM during boot), which is a requested stop, not a failure.
+func stoppedBySignal(ctx context.Context, err error) bool {
+	return err != nil && ctx.Err() != nil && errors.Is(err, context.Canceled)
 }
 
 // bootResources runs independent startup work in parallel: app DB migration,

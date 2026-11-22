@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -73,6 +74,28 @@ func TestRunReturnsConfigErrors(t *testing.T) {
 				t.Errorf("run() = %v, want error containing %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestStoppedBySignal(t *testing.T) {
+	live := t.Context()
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	wrapped := fmt.Errorf("boot: %w", context.Canceled)
+	for _, tt := range []struct {
+		name string
+		ctx  context.Context
+		err  error
+		want bool
+	}{
+		{"signal during boot", canceled, wrapped, true},
+		{"no error", canceled, nil, false},
+		{"real failure after signal", canceled, errors.New("listen: address in use"), false},
+		{"canceled error without a signal", live, wrapped, false},
+	} {
+		if got := stoppedBySignal(tt.ctx, tt.err); got != tt.want {
+			t.Errorf("%s: stoppedBySignal = %v, want %v", tt.name, got, tt.want)
+		}
 	}
 }
 
