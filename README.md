@@ -133,6 +133,7 @@ The TUIs run without a database:
 | `make docker` | Build the server container image |
 | `make test` | Run tests with the race detector and coverage |
 | `make test-short` | Run tests without the race detector (fast inner loop) |
+| `make test-integration` | Run integration tests against Postgres/Valkey containers (needs Docker) |
 | `make cover` | Open the HTML coverage report |
 | `make fuzz` | Run every fuzz target for FUZZTIME (default 30s) each |
 | `make bench` / `make bench-compare` | Run benchmarks (BENCH regexp, PKG, COUNT, BENCHTIME) / compare two runs with benchstat |
@@ -141,7 +142,7 @@ The TUIs run without a database:
 | `make vuln` | Check dependencies for known vulnerabilities |
 | `make tidy` | Tidy go.mod in the app and tools modules |
 | `make check` | Fast pre-push gate |
-| `make ci` | Everything CI runs (except CodeQL and the image build) |
+| `make ci` | Everything CI runs except CodeQL and the Docker jobs (image build, test-integration) |
 | `make pgo` | Regenerate cmd/server/default.pgo from a DURATION-second (default 30) load run |
 | `make release-snapshot` | Build a local goreleaser snapshot into dist/ (needs goreleaser) |
 | `make rename` | Make the template yours: make rename MODULE=github.com/you/app [NAME=app] |
@@ -171,9 +172,11 @@ benchmark and how to read the results.
 
 - **`.github/workflows/commit.yml`** runs on every PR and on pushes to
   `main`. Each job maps to a `make` target, so `make ci` reproduces it
-  locally: `compile-binary`, `build-image` (pushes to GHCR, with provenance
-  and SBOM, only from `main`), `test` (race + coverage, JUnit report),
-  `complexity`, `static-analysis` (tidy, format, vet, golangci-lint,
+  locally (except the Docker jobs): `compile-binary`, `build-image` (pushes
+  to GHCR, with provenance and SBOM, only from `main`), `test` (race +
+  coverage, JUnit report), `integration` (`make test-integration`:
+  `//go:build integration` tests against real Postgres/Valkey containers via
+  testcontainers-go, race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint,
   actionlint), `check-licenses`, `security` (gosec), `vulnerabilities`
   (govulncheck), `release-config` (goreleaser check), `template-rename`
   (`make rename-test`: renames a scratch copy to a throwaway module, checks
@@ -236,7 +239,8 @@ keeps working until the next time you'd refresh it.
 **Removing the server** (e.g. for a CLI-only project) also means deleting
 `ci/Dockerfile`, `fly.toml`, `docker-compose.yml`, `scripts/dev.sh`,
 `scripts/preview-deploy.sh`, `deploy.yml`, `preview.yml`, the `build-image`
-job in `commit.yml`, the `docker`, `run` and `pgo` Makefile targets (and `scripts/pgo.sh`, `docs/pgo.md`), and the
+and `integration` jobs in `commit.yml` (with `internal/testinfra` and the
+`*_integration_test.go` files), the `docker`, `run` and `pgo` Makefile targets (and `scripts/pgo.sh`, `docs/pgo.md`), and the
 Docker entry in `.github/dependabot.yml`. `web/`, `sql/`, `sqlc.yaml` and
 the bun files (`package.json`, `bun.lock`, `turbo.json`) exist only for the
 server.
