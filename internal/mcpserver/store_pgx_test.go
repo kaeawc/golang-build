@@ -10,7 +10,8 @@ import (
 
 // TestPgxStoreContract runs the UserStore contract against Postgres. It is
 // skipped unless MCP_TEST_DATABASE_URL (or DATABASE_URL) is set, so
-// `go test ./...` needs no infrastructure. Everything happens inside a
+// `go test ./...` needs no infrastructure; `make test-integration` sets it
+// to a container (main_integration_test.go). Everything happens inside a
 // rolled-back transaction on a session-local temp table that shadows
 // users, so the test never touches real data.
 func TestPgxStoreContract(t *testing.T) {
@@ -19,7 +20,7 @@ func TestPgxStoreContract(t *testing.T) {
 		dsn = os.Getenv("DATABASE_URL")
 	}
 	if dsn == "" {
-		t.Skip("set MCP_TEST_DATABASE_URL to run the live Postgres store test")
+		t.Skip("set MCP_TEST_DATABASE_URL or run make test-integration for the live Postgres store test")
 	}
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)

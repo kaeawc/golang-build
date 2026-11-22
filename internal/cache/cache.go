@@ -27,8 +27,11 @@ func (c *valkeyCache) Get(ctx context.Context, key string) (string, error) {
 	return c.client.Do(ctx, c.client.B().Get().Key(key).Build()).ToString()
 }
 
+// Set stores value under key for ttl. PX keeps millisecond precision: EX
+// truncates to whole seconds, so sub-second TTLs were rejected by the
+// server and others silently shortened. ttl must be at least 1ms.
 func (c *valkeyCache) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
-	return c.client.Do(ctx, c.client.B().Set().Key(key).Value(value).Ex(ttl).Build()).Error()
+	return c.client.Do(ctx, c.client.B().Set().Key(key).Value(value).Px(ttl).Build()).Error()
 }
 
 func (c *valkeyCache) Close() { c.client.Close() }
