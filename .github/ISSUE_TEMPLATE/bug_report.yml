@@ -1,0 +1,65 @@
+name: Bug report
+description: Something is broken, panics, or regressed
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For a security vulnerability, don't file an
+        issue: use Security → Report a vulnerability instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - HTTP server (cmd/server)
+        - A TUI (cmd/onboard, loadgen, scaffold, admin, devup, migrate, inspect)
+        - MCP server or client (cmd/mcp, cmd/mcpclient)
+        - An internal/ package
+        - Web frontend (web/)
+        - Build, Makefile, tools, or make rename
+        - CI, release, or deploy workflows
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include error messages, logs, or stack traces.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The smallest command sequence, curl call, or Go snippet that shows it.
+      placeholder: |
+        1. make build
+        2. ./bin/server
+        3. curl localhost:8080/healthz
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      placeholder: git rev-parse --short HEAD, or a release tag
+    validations:
+      required: true
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version
+      placeholder: go version
+  - type: input
+    id: os
+    attributes:
+      label: OS and architecture
+      placeholder: e.g. macOS 26 arm64, Ubuntu 24.04 amd64
