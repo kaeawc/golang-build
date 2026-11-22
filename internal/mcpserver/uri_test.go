@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -64,6 +65,49 @@ func FuzzParseUserURI(f *testing.F) {
 			t.Fatalf("accepted URI with separators: %q", uri)
 		}
 	})
+}
+
+// FuzzUserURIRoundTrip is the other direction: every URI the server renders
+// for a valid ID parses back to that ID, and no other ID is representable.
+func FuzzUserURIRoundTrip(f *testing.F) {
+	for _, id := range []int64{1, 42, 0, -1, math.MaxInt64, math.MinInt64} {
+		f.Add(id, false)
+		f.Add(id, true)
+	}
+	f.Fuzz(func(t *testing.T, id int64, avatar bool) {
+		uri := UserURI(id)
+		if avatar {
+			uri = AvatarURI(id)
+		}
+		gotID, gotAvatar, err := ParseUserURI(uri)
+		if id <= 0 {
+			if err == nil {
+				t.Fatalf("ParseUserURI(%q) accepted non-positive id %d", uri, gotID)
+			}
+			return
+		}
+		if err != nil || gotID != id || gotAvatar != avatar {
+			t.Fatalf("ParseUserURI(%q) = %d, %t, %v; want %d, %t", uri, gotID, gotAvatar, err, id, avatar)
+		}
+	})
+}
+
+// BenchmarkParseUserURI is the per-request cost of resolving a templated
+// resource read.
+func BenchmarkParseUserURI(b *testing.B) {
+	for _, bc := range []struct{ name, uri string }{
+		{"user", "users://7"},
+		{"avatar-maxint", AvatarURI(math.MaxInt64)},
+		{"invalid", "users://not-a-number"},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			uri := bc.uri
+			b.ReportAllocs()
+			for b.Loop() {
+				_, _, _ = ParseUserURI(uri)
+			}
+		})
+	}
 }
 
 // BenchmarkCallToolGetUser measures a full typed tool round trip (schema

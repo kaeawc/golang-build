@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -57,34 +58,32 @@ func TestModelFlowEndToEnd(t *testing.T) {
 }
 
 func TestModelGlobalQuitCancelsEngine(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
+	// Real sockets block outside synctest's control, so the engine talks to
+	// the in-memory fakeClient; its 10ms latency runs on the bubble's
+	// virtual clock.
+	synctest.Test(t, func(t *testing.T) {
+		m := newModel("http://example.invalid")
+		m.cfg.Client = &fakeClient{status: http.StatusOK, delay: 10 * time.Millisecond}
+		m = step(t, m, tui.PickerDoneMsg{Tag: tagPickConcurrency, Index: 0})
+		m = step(t, m, tui.PickerDoneMsg{Tag: tagPickDuration, Index: 2}) // 30s
 
-	m := newModel(srv.URL)
-	m = step(t, m, tui.PickerDoneMsg{Tag: tagPickConcurrency, Index: 0})
-	m = step(t, m, tui.PickerDoneMsg{Tag: tagPickDuration, Index: 2}) // 30s
-
-	// Send 'q'. The model should call cancel and emit tea.Quit.
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	if cmd == nil {
-		t.Fatalf("expected quit cmd")
-	}
-	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Errorf("expected QuitMsg")
-	}
-	_ = next
-
-	// Verify the engine actually stopped within a reasonable window.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if m.engine.Snapshot().Done {
-			return
+		// Send 'q'. The model should call cancel and emit tea.Quit.
+		next, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+		if cmd == nil {
+			t.Fatalf("expected quit cmd")
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Errorf("engine did not stop after global quit")
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Errorf("expected QuitMsg")
+		}
+		_ = next
+
+		// Every engine goroutine has exited or parked: the engine must have
+		// stopped without any of the 30s run elapsing.
+		synctest.Wait()
+		if !m.engine.Snapshot().Done {
+			t.Errorf("engine did not stop after global quit")
+		}
+	})
 }
 
 func step(t *testing.T, m model, msg tea.Msg) model {

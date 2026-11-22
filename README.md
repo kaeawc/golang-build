@@ -134,15 +134,38 @@ The TUIs run without a database:
 | `make test` | Run tests with the race detector and coverage |
 | `make test-short` | Run tests without the race detector (fast inner loop) |
 | `make cover` | Open the HTML coverage report |
+| `make fuzz` | Run every fuzz target for FUZZTIME (default 30s) each |
+| `make bench` / `make bench-compare` | Run benchmarks (BENCH regexp, PKG, COUNT, BENCHTIME) / compare two runs with benchstat |
 | `make fmt` | Format code (gofumpt + goimports) |
 | `make lint` / `make lint-fix` | Run golangci-lint / and apply automatic fixes |
 | `make vuln` | Check dependencies for known vulnerabilities |
 | `make tidy` | Tidy go.mod in the app and tools modules |
 | `make check` | Fast pre-push gate |
 | `make ci` | Everything CI runs (except CodeQL and the image build) |
+| `make pgo` | Regenerate cmd/server/default.pgo from a DURATION-second (default 30) load run |
 | `make release-snapshot` | Build a local goreleaser snapshot into dist/ (needs goreleaser) |
 | `make rename` | Make the template yours: make rename MODULE=github.com/you/app [NAME=app] |
 | `make rename-test` | Rename a scratch copy to a throwaway module, then lint, test and build it |
+
+### Profile-guided optimization
+
+The server builds with PGO from the committed `cmd/server/default.pgo`. Go
+picks it up automatically, including in `ci/Dockerfile` and goreleaser.
+`make pgo` regenerates it: it drives the router with headless `cmd/loadgen`
+and pulls a CPU profile from the loopback-only debug listener (`DEBUG_ADDR`).
+[docs/pgo.md](docs/pgo.md) covers when to refresh the profile and how to
+measure the gain.
+
+## Testing
+
+`make test` runs the suite with the race detector. Fuzz targets sit next to
+the parsers they cover (`Fuzz*` in `_test.go`), and their seed corpora and
+any committed failing inputs replay as part of `make test`. `make fuzz
+FUZZTIME=10s` fuzzes every target, and a nightly workflow fuzzes each one
+for 5 minutes. `make bench` runs the `b.Loop()` benchmarks.
+`make bench-compare OLD=old.txt NEW=new.txt` diffs two runs with benchstat.
+[docs/testing.md](docs/testing.md) covers how to write a fuzz target or
+benchmark and how to read the results.
 
 ## CI and releases
 
@@ -156,6 +179,9 @@ The TUIs run without a database:
   (`make rename-test`: renames a scratch copy to a throwaway module, checks
   nothing names the old one, then formats, lints, tests and builds it) and
   `codeql-analysis`. The Go version comes from `go.mod`.
+- **`fuzz.yml`** fuzzes every `Fuzz*` target for 5 minutes each night (or
+  on demand from the Actions tab), one job per target, and uploads the
+  failing input as an artifact. See [docs/testing.md](docs/testing.md).
 - **`deploy.yml`** deploys `main` to Fly.io once `commit.yml` passes on it,
   then smoke-tests `/healthz`.
 - **`preview.yml`**: a maintainer comments `preview` (or `preview 1h`) on a
@@ -198,6 +224,10 @@ What each binary pulls in from `internal/`:
 | Binary | Delete with it (if nothing else uses them) |
 | --- | --- |
 | `onboard`, `loadgen`, `scaffold`, `migrate` | `internal/tui` once all TUIs are gone |
+
+`make pgo` builds `cmd/loadgen`. If you delete loadgen, also delete the `pgo`
+Makefile target and `scripts/pgo.sh`. The committed `cmd/server/default.pgo`
+keeps working until the next time you'd refresh it.
 | `admin` | `internal/tui` |
 | `devup` | `internal/proc`, `internal/tui` |
 | `inspect` | `internal/eventbus`, `internal/tui` |
@@ -206,7 +236,7 @@ What each binary pulls in from `internal/`:
 **Removing the server** (e.g. for a CLI-only project) also means deleting
 `ci/Dockerfile`, `fly.toml`, `docker-compose.yml`, `scripts/dev.sh`,
 `scripts/preview-deploy.sh`, `deploy.yml`, `preview.yml`, the `build-image`
-job in `commit.yml`, the `docker` and `run` Makefile targets, and the
+job in `commit.yml`, the `docker`, `run` and `pgo` Makefile targets (and `scripts/pgo.sh`, `docs/pgo.md`), and the
 Docker entry in `.github/dependabot.yml`. `web/`, `sql/`, `sqlc.yaml` and
 the bun files (`package.json`, `bun.lock`, `turbo.json`) exist only for the
 server.

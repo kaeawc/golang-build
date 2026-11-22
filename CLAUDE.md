@@ -14,6 +14,8 @@ make build           # Build all cmd/* binaries into bin/ (make build-server for
 make test            # Tests with -race and coverage
 go test ./internal/handlers/ -run TestGetUsers   # Single test
 make test-junit      # Tests with JUnit output, as CI does
+make fuzz FUZZTIME=10s   # Every Fuzz* target in turn (scripts/fuzz.sh); see docs/testing.md
+make bench           # b.Loop benchmarks; BENCH=, PKG=, COUNT=; make bench-compare runs benchstat
 make lint            # golangci-lint v2 (config: .golangci.yml); make lint-fix to autofix
 make fmt             # gofumpt + goimports
 make complexity      # gocyclo, flags functions over 10
@@ -23,6 +25,7 @@ make licenses        # go-licenses check
 make check           # Fast pre-push gate; make ci runs everything CI does
 make docker          # Build the server image from ci/Dockerfile
 make rename MODULE=github.com/you/app [NAME=app]   # Rename module + project (scripts/rename-module); make rename-test proves it
+make pgo             # Regenerate cmd/server/default.pgo (DURATION=30 seconds of load)
 ```
 
 Dev tools are pinned in `tools/go.mod` with `tool` directives and run via
@@ -31,6 +34,7 @@ install beyond Go.
 
 ## Architecture
 
+- **`cmd/server/debug.go`** — pprof on a separate debug listener (`DEBUG_ADDR`, disabled by default, loopback-only unless `DEBUG_ALLOW_NON_LOOPBACK`), never on the public mux. `default.pgo` next to it is the committed PGO profile; `make pgo` regenerates it via the harness in `pgo_harness_test.go`. See `docs/pgo.md`.
 - **`cmd/server/main.go`** — Entry point. `buildRouter` registers `http.ServeMux` patterns (`"GET /api/users"`, SPA on `"GET /"`, so wrong methods get 405) and wraps each `/api` route in the `httpmw.Compose` chain (Logging → Recover → Traffic → Gzip → ContentType), then starts the HTTP server.
 - **`cmd/onboard/`** — TUI wizard that walks the user through generating a `.env` for the server. Demonstrates the `internal/tui` framework.
 - **`cmd/loadgen/`** — TUI HTTP load generator with a live-updating dashboard. Demonstrates the `LiveView` phase.
@@ -54,4 +58,4 @@ install beyond Go.
 
 ## CI Pipeline
 
-Defined in `.github/workflows/commit.yml`. Runs on PRs and pushes to `main`. Jobs: `compile-binary`, `build-image` (depends on compile; pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security`, `vulnerabilities`, `release-config`, `template-rename` (`make rename-test`), `codeql-analysis`. Each maps to a `make` target. Go version is read from `go.mod`. `deploy.yml` runs after `commit.yml` succeeds on `main`; `release.yml` runs on `v*` tags.
+Defined in `.github/workflows/commit.yml`. Runs on PRs and pushes to `main`. Jobs: `compile-binary`, `build-image` (depends on compile; pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security`, `vulnerabilities`, `release-config`, `template-rename` (`make rename-test`), `codeql-analysis`. Each maps to a `make` target. Go version is read from `go.mod`. `deploy.yml` runs after `commit.yml` succeeds on `main`; `release.yml` runs on `v*` tags; `fuzz.yml` fuzzes every target nightly (and on `workflow_dispatch`) and uploads `testdata/fuzz` on failure.

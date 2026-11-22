@@ -99,6 +99,10 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 	}
 	coord.Register("telemetry", stopTelemetry)
 
+	if _, err := startDebugServer(ctx, cfg, log, coord); err != nil {
+		return err
+	}
+
 	pool, c, err := bootResources(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("boot: %w", err)
@@ -112,11 +116,7 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 
 	router := buildRouter(log, pool, db.New(pool), c)
 
-	attrs := []any{"port", cfg.Port, "env", cfg.Environment}
-	if cfg.Fly.OnFly() {
-		attrs = append(attrs, "fly_app", cfg.Fly.AppName, "fly_region", cfg.Fly.Region, "fly_machine", cfg.Fly.MachineID)
-	}
-	log.Info("server starting", attrs...)
+	log.Info("server starting", startupAttrs(cfg)...)
 
 	srv := httpserver.New(httpserver.Config{
 		Addr:         ":" + cfg.Port,
@@ -215,6 +215,14 @@ func buildVersion() string {
 		}
 	}
 	return "dev"
+}
+
+func startupAttrs(cfg *config.Config) []any {
+	attrs := []any{"port", cfg.Port, "env", cfg.Environment}
+	if cfg.Fly.OnFly() {
+		attrs = append(attrs, "fly_app", cfg.Fly.AppName, "fly_region", cfg.Fly.Region, "fly_machine", cfg.Fly.MachineID)
+	}
+	return attrs
 }
 
 // stoppedBySignal reports whether err is only the cancellation of ctx
