@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/kaeawc/golang-build/internal/clock"
@@ -153,22 +154,23 @@ func TestGetOrSetPropagatesError(t *testing.T) {
 }
 
 func TestJanitorSweeps(t *testing.T) {
-	clk := clock.NewFake(time.Unix(0, 0))
-	m := NewMemory[int](Config{Clock: clk, JanitorInterval: 5 * time.Millisecond})
-	defer m.Close()
+	synctest.Test(t, func(t *testing.T) {
+		const interval = 5 * time.Millisecond
+		clk := clock.NewFake(time.Unix(0, 0))
+		m := NewMemory[int](Config{Clock: clk, JanitorInterval: interval})
+		defer m.Close()
 
-	m.SetWithTTL("k", 1, 10*time.Millisecond)
-	clk.Advance(50 * time.Millisecond)
+		m.SetWithTTL("k", 1, 10*time.Millisecond)
+		clk.Advance(50 * time.Millisecond)
 
-	// Janitor uses real time.NewTicker; give it a real moment to fire.
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if m.Len() == 0 {
-			return
+		// The janitor's time.NewTicker runs on the bubble's virtual clock:
+		// sleeping one interval fires it exactly once, with no real wait.
+		time.Sleep(interval)
+		synctest.Wait()
+		if got := m.Len(); got != 0 {
+			t.Errorf("janitor did not sweep after one tick; Len=%d", got)
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Errorf("janitor did not sweep within deadline; Len=%d", m.Len())
+	})
 }
 
 func TestCloseIsIdempotent(t *testing.T) {

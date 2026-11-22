@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/kaeawc/golang-build/internal/clock"
@@ -127,30 +128,34 @@ func TestManualAllowAndWait(t *testing.T) {
 }
 
 func TestManualWaitBlocksUntilAdd(t *testing.T) {
-	m := NewManual(0)
-	done := make(chan error, 1)
-	go func() {
-		done <- m.Wait(context.Background())
-	}()
+	synctest.Test(t, func(t *testing.T) {
+		m := NewManual(0)
+		done := make(chan error, 1)
+		go func() {
+			done <- m.Wait(context.Background())
+		}()
 
-	select {
-	case <-done:
-		t.Fatal("Wait returned before tokens were added")
-	case <-time.After(20 * time.Millisecond):
-	}
-
-	m.Add(1)
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Errorf("Wait err = %v", err)
+		synctest.Wait()
+		select {
+		case <-done:
+			t.Fatal("Wait returned before tokens were added")
+		default:
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Wait did not return after Add")
-	}
-	if m.Tokens() != 0 {
-		t.Errorf("Tokens after Wait consumed = %d, want 0", m.Tokens())
-	}
+
+		m.Add(1)
+		synctest.Wait()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("Wait err = %v", err)
+			}
+		default:
+			t.Fatal("Wait did not return after Add")
+		}
+		if m.Tokens() != 0 {
+			t.Errorf("Tokens after Wait consumed = %d, want 0", m.Tokens())
+		}
+	})
 }
 
 func TestManualWaitContextCancel(t *testing.T) {
@@ -164,23 +169,26 @@ func TestManualWaitContextCancel(t *testing.T) {
 }
 
 func TestManualWaitWakesOnCancelMidBlock(t *testing.T) {
-	m := NewManual(0)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	synctest.Test(t, func(t *testing.T) {
+		m := NewManual(0)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
 
-	done := make(chan error, 1)
-	go func() { done <- m.Wait(ctx) }()
-	time.Sleep(20 * time.Millisecond)
-	cancel()
+		done := make(chan error, 1)
+		go func() { done <- m.Wait(ctx) }()
+		synctest.Wait() // Wait is parked in cond.Wait
+		cancel()
+		synctest.Wait()
 
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("err = %v, want context.Canceled", err)
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("err = %v, want context.Canceled", err)
+			}
+		default:
+			t.Fatal("Wait did not return after cancel")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Wait did not return after cancel")
-	}
+	})
 }
 
 func TestManualSet(t *testing.T) {
