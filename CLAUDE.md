@@ -14,6 +14,8 @@ make build           # Build all cmd/* binaries into bin/ (make build-server for
 make test            # Tests with -race and coverage
 go test ./internal/handlers/ -run TestGetUsers   # Single test
 make test-junit      # Tests with JUnit output, as CI does
+make fuzz FUZZTIME=10s   # Every Fuzz* target in turn (scripts/fuzz.sh); see docs/testing.md
+make bench           # b.Loop benchmarks; BENCH=, PKG=, COUNT=; make bench-compare runs benchstat
 make lint            # golangci-lint v2 (config: .golangci.yml); make lint-fix to autofix
 make fmt             # gofumpt + goimports
 make complexity      # gocyclo, flags functions over 10
@@ -50,4 +52,4 @@ install beyond Go.
 
 ## CI Pipeline
 
-Defined in `.github/workflows/commit.yml`. Runs on PRs and pushes to `main`. Jobs: `compile-binary`, `build-image` (depends on compile; pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security`, `vulnerabilities`, `release-config`, `codeql-analysis`. Each maps to a `make` target. Go version is read from `go.mod`. `deploy.yml` runs after `commit.yml` succeeds on `main`; `release.yml` runs on `v*` tags.
+Defined in `.github/workflows/commit.yml`. Runs on PRs and pushes to `main`. Jobs: `compile-binary`, `build-image` (depends on compile; pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security`, `vulnerabilities`, `release-config`, `codeql-analysis`. Each maps to a `make` target. Go version is read from `go.mod`. `deploy.yml` runs after `commit.yml` succeeds on `main`; `release.yml` runs on `v*` tags; `fuzz.yml` fuzzes every target nightly (and on `workflow_dispatch`) and uploads `testdata/fuzz` on failure.

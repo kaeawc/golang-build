@@ -14,6 +14,17 @@ Experimental Go build tooling, references, and CI pipeline.
 - `cmd/mcp` — Model Context Protocol server (spec 2026-07-28, compatible with 2025-11-25 clients) exposing the users directory over stdio or streamable HTTP. See [docs/mcp.md](docs/mcp.md).
 - `cmd/mcpclient` — plain CLI MCP client that walks through every server feature (discovery, pagination, subscriptions, progress, elicitation, ...).
 
+## Testing
+
+`make test` runs the suite with the race detector. Fuzz targets sit next to
+the parsers they cover (`Fuzz*` in `_test.go`), and their seed corpora and
+any committed failing inputs replay as part of `make test`. `make fuzz
+FUZZTIME=10s` fuzzes every target, and a nightly workflow fuzzes each one
+for 5 minutes. `make bench` runs the `b.Loop()` benchmarks.
+`make bench-compare OLD=old.txt NEW=new.txt` diffs two runs with benchstat.
+[docs/testing.md](docs/testing.md) covers how to write a fuzz target or
+benchmark and how to read the results.
+
 ## TUI scaffolding
 
 `internal/tui/` is a small framework on top of [bubbletea](https://github.com/charmbracelet/bubbletea)/[lipgloss](https://github.com/charmbracelet/lipgloss) for building multi-step terminal wizards from this template. It exposes a `Phase` interface and four reusable phases:

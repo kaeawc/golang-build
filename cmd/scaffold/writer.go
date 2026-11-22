@@ -20,7 +20,7 @@ var reservedNames = map[string]struct{}{
 	"break": {}, "const": {}, "range": {}, "return": {}, "select": {},
 	"struct": {}, "switch": {}, "import": {}, "package": {},
 	"chan": {}, "goto": {}, "continue": {}, "fallthrough": {}, "interface": {},
-	"main": {},
+	"default": {}, "main": {},
 }
 
 // validateName returns nil if name is a legal scaffold target.

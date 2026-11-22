@@ -166,7 +166,7 @@ func (h *HMAC256) Verify(token string, dst any) error {
 
 	signingInput := parts[0] + "." + parts[1]
 	expected := h.sign([]byte(signingInput))
-	got, err := base64.RawURLEncoding.DecodeString(parts[2])
+	got, err := decodeCanonical(parts[2])
 	if err != nil {
 		return fmt.Errorf("%w: signature base64: %w", ErrMalformed, err)
 	}
@@ -230,6 +230,24 @@ func (h *HMAC256) checkTimeClaims(payload []byte) error {
 		}
 	}
 	return nil
+}
+
+var errNonCanonical = errors.New("non-canonical encoding")
+
+// decodeCanonical accepts only the one encoding Sign would produce. The
+// lenient decoder ignores CR/LF and the unused low bits of the last
+// character, so several distinct strings decode to the same signature;
+// that would make issued tokens malleable and defeat anything keyed by the
+// token string (revocation lists, replay caches).
+func decodeCanonical(s string) ([]byte, error) {
+	b, err := base64.RawURLEncoding.Strict().DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+	if base64.RawURLEncoding.EncodedLen(len(b)) != len(s) {
+		return nil, errNonCanonical
+	}
+	return b, nil
 }
 
 func (h *HMAC256) sign(input []byte) []byte {
