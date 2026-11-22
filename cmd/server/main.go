@@ -9,10 +9,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/kaeawc/golang-build/internal/cache"
@@ -28,6 +34,7 @@ import (
 	"github.com/kaeawc/golang-build/internal/logger"
 	"github.com/kaeawc/golang-build/internal/middleware"
 	"github.com/kaeawc/golang-build/internal/shutdown"
+	"github.com/kaeawc/golang-build/internal/telemetry"
 )
 
 func main() {
@@ -49,7 +56,10 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
-	log := logger.NewSlog(logger.Config{Writer: logOut, Format: cfg.LogFormat, Level: cfg.LogLevel})
+	// LogHandler adds trace_id/span_id to records logged with a span in
+	// their context.
+	base := logger.NewSlog(logger.Config{Writer: logOut, Format: cfg.LogFormat, Level: cfg.LogLevel})
+	log := slog.New(telemetry.LogHandler(base.Handler()))
 	// Also routes the standard log package (used by some dependencies)
 	// through this handler.
 	slog.SetDefault(log)
@@ -75,6 +85,19 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 		}
 	}()
 
+	// Opt-in: a no-op unless OTEL_EXPORTER_OTLP_ENDPOINT (or a per-signal
+	// endpoint) is set. Registered first so it runs last and flushes the
+	// spans the other hooks produce.
+	stopTelemetry, err := telemetry.Setup(ctx, r, telemetry.Service{
+		Name:        "golang-build-server",
+		Version:     buildVersion(),
+		Environment: string(cfg.Environment),
+	})
+	if err != nil {
+		return err
+	}
+	coord.Register("telemetry", stopTelemetry)
+
 	pool, c, err := bootResources(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("boot: %w", err)
@@ -82,6 +105,36 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 	coord.Register("cache", func(context.Context) error { c.Close(); return nil })
 	coord.Register("db-pool", func(context.Context) error { pool.Close(); return nil })
 
+	if err := startJobs(ctx, pool, log, coord); err != nil {
+		return err
+	}
+
+	router := buildRouter(log, pool, db.New(pool), c)
+
+	attrs := []any{"port", cfg.Port, "env", cfg.Environment}
+	if cfg.Fly.OnFly() {
+		attrs = append(attrs, "fly_app", cfg.Fly.AppName, "fly_region", cfg.Fly.Region, "fly_machine", cfg.Fly.MachineID)
+	}
+	log.Info("server starting", attrs...)
+
+	srv := httpserver.New(httpserver.Config{
+		Addr:         ":" + cfg.Port,
+		Handler:      instrument(router),
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+		Signals:      []os.Signal{}, // ctx carries SIGINT/SIGTERM (see main)
+	})
+	if err := srv.Run(ctx); err != nil {
+		return fmt.Errorf("server: %w", err)
+	}
+	log.Info("server stopped")
+	return nil
+}
+
+// startJobs migrates River's schema, starts the client and registers its
+// graceful stop as a shutdown hook.
+func startJobs(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, coord *shutdown.Coordinator) error {
 	if err := jobs.Migrate(ctx, pool); err != nil {
 		return err
 	}
@@ -95,28 +148,63 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 		return fmt.Errorf("river start: %w", err)
 	}
 	coord.Register("river", jobs.Stop(riverClient, log))
-
-	router := buildRouter(log, pool, db.New(pool), c)
-
-	attrs := []any{"port", cfg.Port, "env", cfg.Environment}
-	if cfg.Fly.OnFly() {
-		attrs = append(attrs, "fly_app", cfg.Fly.AppName, "fly_region", cfg.Fly.Region, "fly_machine", cfg.Fly.MachineID)
-	}
-	log.Info("server starting", attrs...)
-
-	srv := httpserver.New(httpserver.Config{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  120 * time.Second,
-		Signals:      []os.Signal{}, // ctx carries SIGINT/SIGTERM (see main)
-	})
-	if err := srv.Run(ctx); err != nil {
-		return fmt.Errorf("server: %w", err)
-	}
-	log.Info("server stopped")
 	return nil
+}
+
+// instrument wraps the router in OpenTelemetry HTTP server tracing and
+// metrics. Spans are named after the matched ServeMux pattern ("GET
+// /api/users"), or the bare method when nothing matched (405, redirect).
+// /healthz is not traced: Fly probes it every ~15s.
+func instrument(h http.Handler, opts ...otelhttp.Option) http.Handler {
+	opts = append([]otelhttp.Option{
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			if r.Pattern != "" {
+				return r.Pattern
+			}
+			return r.Method
+		}),
+		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }),
+	}, opts...)
+	// ServeMux sets r.Pattern on the request it is given, so read it after
+	// routing to add http.route to the span (otelhttp only adds it to
+	// metrics).
+	routed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r)
+		if route := httpRoute(r.Pattern); route != "" {
+			trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(route))
+		}
+	})
+	return otelhttp.NewHandler(routed, "http.server", opts...)
+}
+
+// httpRoute strips the method and host from a ServeMux pattern:
+// "GET example.com/api/{id}" → "/api/{id}".
+func httpRoute(pattern string) string {
+	if _, rest, ok := strings.Cut(pattern, " "); ok {
+		pattern = rest
+	}
+	if i := strings.IndexByte(pattern, '/'); i > 0 {
+		pattern = pattern[i:]
+	}
+	return pattern
+}
+
+// buildVersion reports the module version, or the VCS revision for local
+// builds, for the service.version resource attribute.
+func buildVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	if v := info.Main.Version; v != "" && v != "(devel)" {
+		return v
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.revision" {
+			return s.Value
+		}
+	}
+	return "dev"
 }
 
 // stoppedBySignal reports whether err is only the cancellation of ctx
@@ -138,12 +226,17 @@ func bootResources(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, cach
 		return db.Migrate("file://sql/migrations", cfg.MigrationDatabaseURL)
 	})
 	g.Go(func() error {
-		p, err := pgxpool.New(gctx, cfg.DatabaseURL)
+		pcfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+		if err != nil {
+			return err
+		}
+		pcfg.ConnConfig.Tracer = otelpgx.NewTracer()
+		p, err := pgxpool.NewWithConfig(gctx, pcfg)
 		if err != nil {
 			return err
 		}
 		pool = p
-		return nil
+		return otelpgx.RecordStats(p)
 	})
 	g.Go(func() error {
 		cc, err := cache.New(cfg.ValkeyAddr)

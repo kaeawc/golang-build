@@ -19,7 +19,7 @@ func WebSocket() http.HandlerFunc {
 		log := logger.FromContext(r.Context())
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Warn("websocket upgrade", "err", err)
+			log.WarnContext(r.Context(), "websocket upgrade", "err", err)
 			return
 		}
 		defer conn.Close()
@@ -27,12 +27,12 @@ func WebSocket() http.HandlerFunc {
 			msgType, msg, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Warn("websocket read", "err", err)
+					log.WarnContext(r.Context(), "websocket read", "err", err)
 				}
 				break
 			}
 			if err := conn.WriteMessage(msgType, msg); err != nil {
-				log.Warn("websocket write", "err", err)
+				log.WarnContext(r.Context(), "websocket write", "err", err)
 				break
 			}
 		}

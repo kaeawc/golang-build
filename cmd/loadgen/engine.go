@@ -9,6 +9,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // HTTPClient is the slice of net/http used by the engine. Splitting it
@@ -75,7 +77,9 @@ func NewEngine(cfg Config) *Engine {
 		cfg.Now = time.Now
 	}
 	if cfg.Client == nil {
-		cfg.Client = &http.Client{Timeout: 5 * time.Second}
+		// otelhttp propagates trace context to the target and records
+		// client spans; both are no-ops unless telemetry is set up.
+		cfg.Client = &http.Client{Timeout: 5 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)}
 	}
 	return &Engine{
 		cfg:          cfg,

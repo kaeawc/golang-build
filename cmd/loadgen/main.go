@@ -8,14 +8,20 @@
 // Headless:
 //
 //	loadgen --concurrency 16 --duration 5s --yes http://localhost:8080/healthz
+//
+// Set OTEL_EXPORTER_OTLP_ENDPOINT to export client spans; trace context
+// propagates to the target so its server spans join the same traces.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/kaeawc/golang-build/internal/env"
+	"github.com/kaeawc/golang-build/internal/telemetry"
 	"github.com/kaeawc/golang-build/internal/tui"
 )
 
@@ -36,6 +42,13 @@ func run(args []string) int {
 		return 2
 	}
 	url := fs.Args()[0]
+
+	stopTelemetry, err := telemetry.Setup(context.Background(), env.Default, telemetry.Service{Name: "golang-build-loadgen"})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	defer func() { _ = stopTelemetry(context.Background()) }()
 
 	if *yes {
 		if _, err := runHeadless(os.Stdout, url, *conc, *dur); err != nil {

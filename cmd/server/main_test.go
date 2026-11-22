@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,11 +15,16 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
 	"github.com/kaeawc/golang-build/internal/db"
 	"github.com/kaeawc/golang-build/internal/env"
 	"github.com/kaeawc/golang-build/internal/handlers"
 	"github.com/kaeawc/golang-build/internal/httpmw"
 	"github.com/kaeawc/golang-build/internal/middleware"
+	"github.com/kaeawc/golang-build/internal/telemetry"
 )
 
 type testQuerier struct{}
@@ -264,5 +270,66 @@ func TestAPIMiddlewareWrapsOnlyAPIRoutes(t *testing.T) {
 		if slices.Contains(paths, p) {
 			t.Errorf("traffic recorded unmatched request %q: %v", p, paths)
 		}
+	}
+}
+
+// TestInstrumentTracesRoutesAndJoinsLogs checks the otelhttp wrapper names
+// server spans after the ServeMux pattern, skips /healthz, and that the
+// request-scoped access log line carries the span's trace_id.
+func TestHTTPRoute(t *testing.T) {
+	for pattern, want := range map[string]string{
+		"GET /api/users":           "/api/users",
+		"/ws":                      "/ws",
+		"GET example.com/api/{id}": "/api/{id}",
+		"":                         "",
+	} {
+		if got := httpRoute(pattern); got != want {
+			t.Errorf("httpRoute(%q) = %q, want %q", pattern, got, want)
+		}
+	}
+}
+
+func TestInstrumentTracesRoutesAndJoinsLogs(t *testing.T) {
+	rec := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec))
+	var logs bytes.Buffer
+	log := slog.New(telemetry.LogHandler(slog.NewJSONHandler(&logs, nil)))
+	h := instrument(buildRouter(log, testPinger{}, &testQuerier{}, &testCache{}), otelhttp.WithTracerProvider(tp))
+
+	for _, req := range []struct{ method, path string }{
+		{http.MethodGet, "/api/users"},
+		{http.MethodPost, "/api/users"},
+		{http.MethodGet, "/healthz"},
+	} {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(req.method, req.path, nil))
+	}
+
+	var names []string
+	var usersSpan sdktrace.ReadOnlySpan
+	for _, s := range rec.Ended() {
+		names = append(names, s.Name())
+		if s.Name() == "GET /api/users" {
+			usersSpan = s
+		}
+	}
+	if !slices.Equal(names, []string{"GET /api/users", "POST"}) {
+		t.Fatalf("span names = %q, want [GET /api/users POST] (/healthz untraced)", names)
+	}
+	var route string
+	for _, a := range usersSpan.Attributes() {
+		if a.Key == "http.route" {
+			route = a.Value.AsString()
+		}
+	}
+	if route != "/api/users" {
+		t.Errorf("http.route = %q, want /api/users", route)
+	}
+
+	var access map[string]any
+	if err := json.NewDecoder(&logs).Decode(&access); err != nil {
+		t.Fatalf("decode access log: %v (%q)", err, logs.String())
+	}
+	if access["msg"] != "http request" || access["trace_id"] != usersSpan.SpanContext().TraceID().String() {
+		t.Errorf("access log = %v, want trace_id %s", access, usersSpan.SpanContext().TraceID())
 	}
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivermigrate"
+	"github.com/riverqueue/river/rivertype"
+	"github.com/riverqueue/rivercontrib/otelriver"
 )
 
 // Queue names. Use QueueInteractive for jobs that touch shared external state
@@ -52,7 +54,9 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 // leadership, maintenance) go to log.
 func NewClient(pool *pgxpool.Pool, workers *river.Workers, log *slog.Logger) (*river.Client[pgx.Tx], error) {
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Logger:               log,
+		Logger: log,
+		// Job spans and river.* metrics; no-op unless telemetry is set up.
+		Middleware:           []rivertype.Middleware{otelriver.NewMiddleware(nil)},
 		JobTimeout:           JobTimeout,
 		RescueStuckJobsAfter: RescueStuckJobsAfter,
 		Queues: map[string]river.QueueConfig{

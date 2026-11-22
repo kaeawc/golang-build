@@ -76,6 +76,6 @@ func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(data); err != nil {
-		logger.FromContext(r.Context()).Warn("write response", "err", err)
+		logger.FromContext(r.Context()).WarnContext(r.Context(), "write response", "err", err)
 	}
 }
