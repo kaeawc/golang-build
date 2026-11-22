@@ -36,3 +36,7 @@ The server logs with `log/slog` to stderr. Optional settings (plain env, not sec
 - `LOG_FORMAT`: `json` or `text`. Defaults to `text` when `ENVIRONMENT=development` and `json` everywhere else.
 
 Each `/api` request gets a request-scoped logger carrying `request_id` (from `X-Request-ID`, or generated and echoed back), `method` and `path`. Handlers retrieve it with `logger.FromContext(r.Context())`.
+
+## Profiling
+
+`DEBUG_ADDR` (e.g. `127.0.0.1:6060`) serves `/debug/pprof/*` on a separate listener; unset (the default) disables it. Non-loopback hosts are refused unless `DEBUG_ALLOW_NON_LOOPBACK=true`. Reach it on a machine through `fly proxy` or an SSH tunnel. The server is built with PGO from `cmd/server/default.pgo`; see [docs/pgo.md](../pgo.md).

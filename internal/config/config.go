@@ -7,6 +7,9 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net"
+	"net/netip"
+	"strings"
 
 	"github.com/kaeawc/golang-build/internal/env"
 	"github.com/kaeawc/golang-build/internal/logger"
@@ -52,6 +55,10 @@ type Config struct {
 	// LogFormat comes from LOG_FORMAT (json or text). Defaults to text in
 	// development and JSON everywhere else.
 	LogFormat logger.Format
+	// DebugAddr comes from DEBUG_ADDR: the listen address of the pprof
+	// debug server (e.g. 127.0.0.1:6060). Empty disables it. The host
+	// must be loopback unless DEBUG_ALLOW_NON_LOOPBACK is true.
+	DebugAddr string
 }
 
 func Load(r env.Reader) (*Config, error) {
@@ -78,6 +85,10 @@ func Load(r env.Reader) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	debugAddr, err := loadDebugAddr(r)
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		Port:                 port,
 		Environment:          envName,
@@ -92,7 +103,39 @@ func Load(r env.Reader) (*Config, error) {
 		},
 		LogLevel:  level,
 		LogFormat: format,
+		DebugAddr: debugAddr,
 	}, nil
+}
+
+// loadDebugAddr reads DEBUG_ADDR. pprof exposes heap contents, command
+// lines and CPU-burning endpoints, so a host that is not loopback
+// (including an empty host, which binds every interface) is refused
+// unless DEBUG_ALLOW_NON_LOOPBACK opts in.
+func loadDebugAddr(r env.Reader) (string, error) {
+	addr := env.GetTrim(r, "DEBUG_ADDR")
+	if addr == "" {
+		return "", nil
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", fmt.Errorf("DEBUG_ADDR %q: %w", addr, err)
+	}
+	allow, err := env.GetBool(r, "DEBUG_ALLOW_NON_LOOPBACK", false)
+	if err != nil {
+		return "", err
+	}
+	if !allow && !isLoopbackHost(host) {
+		return "", fmt.Errorf("DEBUG_ADDR %q: host must be loopback (127.0.0.1, ::1 or localhost); set DEBUG_ALLOW_NON_LOOPBACK=true to expose pprof beyond this machine", addr)
+	}
+	return addr, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
 }
 
 func loadLogging(r env.Reader, envName Environment) (slog.Level, logger.Format, error) {
