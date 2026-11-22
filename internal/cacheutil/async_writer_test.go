@@ -4,7 +4,6 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/kaeawc/golang-build/internal/cacheutil"
 )
@@ -70,20 +69,27 @@ func TestAsyncWriter_CloseReturnsJobErrors(t *testing.T) {
 
 func TestAsyncWriter_CloseWhileSubmittingDoesNotPanic(t *testing.T) {
 	w := cacheutil.NewAsyncWriter(1, 1)
+	started := make(chan struct{})
+	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deadline := time.After(20 * time.Millisecond)
-		for {
+		for first := true; ; first = false {
 			select {
-			case <-deadline:
+			case <-stop:
 				return
 			default:
 				_ = w.Submit(func() (int64, error) { return 0, nil })
 			}
+			if first {
+				close(started)
+			}
 		}
 	}()
-	time.Sleep(time.Millisecond)
+	// Close only once the submitter is spinning, and keep it spinning
+	// until Close has returned, so the two always overlap.
+	<-started
 	_ = w.Close()
+	close(stop)
 	<-done
 }

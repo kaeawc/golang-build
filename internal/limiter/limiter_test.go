@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -30,50 +31,57 @@ func TestAcquireReleaseBasic(t *testing.T) {
 }
 
 func TestAcquireBlocksUntilRelease(t *testing.T) {
-	s := NewSemaphore(1)
-	_ = s.Acquire(context.Background())
-
-	done := make(chan struct{})
-	go func() {
+	synctest.Test(t, func(t *testing.T) {
+		s := NewSemaphore(1)
 		_ = s.Acquire(context.Background())
-		close(done)
-	}()
 
-	select {
-	case <-done:
-		t.Fatal("second Acquire should block while semaphore is full")
-	case <-time.After(20 * time.Millisecond):
-	}
+		done := make(chan struct{})
+		go func() {
+			_ = s.Acquire(context.Background())
+			close(done)
+		}()
 
-	s.Release()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("blocked Acquire did not unblock after Release")
-	}
+		synctest.Wait()
+		select {
+		case <-done:
+			t.Fatal("second Acquire should block while semaphore is full")
+		default:
+		}
+
+		s.Release()
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("blocked Acquire did not unblock after Release")
+		}
+	})
 }
 
 func TestAcquireContextCancel(t *testing.T) {
-	s := NewSemaphore(1)
-	_ = s.Acquire(context.Background())
+	synctest.Test(t, func(t *testing.T) {
+		s := NewSemaphore(1)
+		_ = s.Acquire(context.Background())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
 
-	done := make(chan error, 1)
-	go func() { done <- s.Acquire(ctx) }()
+		done := make(chan error, 1)
+		go func() { done <- s.Acquire(ctx) }()
 
-	time.Sleep(10 * time.Millisecond)
-	cancel()
+		synctest.Wait() // Acquire is parked in cond.Wait
+		cancel()
+		synctest.Wait()
 
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("err = %v, want context.Canceled", err)
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("err = %v, want context.Canceled", err)
+			}
+		default:
+			t.Fatal("Acquire did not return after cancel")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Acquire did not return after cancel")
-	}
+	})
 }
 
 func TestAcquireNExceedsCapacity(t *testing.T) {
@@ -150,55 +158,60 @@ func TestRunPropagatesError(t *testing.T) {
 }
 
 func TestStatsTracksWaiters(t *testing.T) {
-	s := NewSemaphore(1)
-	_ = s.Acquire(context.Background())
+	synctest.Test(t, func(t *testing.T) {
+		s := NewSemaphore(1)
+		_ = s.Acquire(context.Background())
 
-	var wg sync.WaitGroup
-	wg.Add(3)
-	for range 3 {
-		go func() {
-			defer wg.Done()
-			_ = s.Acquire(context.Background())
-			s.Release()
-		}()
-	}
-	time.Sleep(20 * time.Millisecond)
-	s.Release() // release the initial Acquire; the 3 goroutines drain themselves
-	wg.Wait()
+		var wg sync.WaitGroup
+		wg.Add(3)
+		for range 3 {
+			go func() {
+				defer wg.Done()
+				_ = s.Acquire(context.Background())
+				s.Release()
+			}()
+		}
+		synctest.Wait() // all 3 goroutines are parked waiting for a permit
+		s.Release()     // release the initial Acquire; the 3 goroutines drain themselves
+		wg.Wait()
 
-	stats := s.Stats()
-	if stats.TotalAcquired != 4 {
-		t.Errorf("TotalAcquired = %d, want 4", stats.TotalAcquired)
-	}
-	if stats.TotalWaited < 1 {
-		t.Errorf("TotalWaited = %d, want >= 1", stats.TotalWaited)
-	}
+		stats := s.Stats()
+		if stats.TotalAcquired != 4 {
+			t.Errorf("TotalAcquired = %d, want 4", stats.TotalAcquired)
+		}
+		if stats.TotalWaited != 3 {
+			t.Errorf("TotalWaited = %d, want 3", stats.TotalWaited)
+		}
+	})
 }
 
 func TestConcurrentNeverExceedsCapacity(t *testing.T) {
-	const cap = 5
-	s := NewSemaphore(cap)
-	var inFlight, peak atomic.Int32
-	var wg sync.WaitGroup
-	for range 200 {
-		wg.Go(func() {
-			_ = s.Acquire(context.Background())
-			cur := inFlight.Add(1)
-			for {
-				p := peak.Load()
-				if cur <= p || peak.CompareAndSwap(p, cur) {
-					break
+	synctest.Test(t, func(t *testing.T) {
+		const cap = 5
+		s := NewSemaphore(cap)
+		var inFlight, peak atomic.Int32
+		var wg sync.WaitGroup
+		for range 200 {
+			wg.Go(func() {
+				_ = s.Acquire(context.Background())
+				cur := inFlight.Add(1)
+				for {
+					p := peak.Load()
+					if cur <= p || peak.CompareAndSwap(p, cur) {
+						break
+					}
 				}
-			}
-			time.Sleep(time.Millisecond)
-			inFlight.Add(-1)
-			s.Release()
-		})
-	}
-	wg.Wait()
-	if peak.Load() > int32(cap) {
-		t.Errorf("peak in-flight = %d, exceeded capacity %d", peak.Load(), cap)
-	}
+				// Virtual time: hold the permit so holders overlap.
+				time.Sleep(time.Millisecond)
+				inFlight.Add(-1)
+				s.Release()
+			})
+		}
+		wg.Wait()
+		if peak.Load() > int32(cap) {
+			t.Errorf("peak in-flight = %d, exceeded capacity %d", peak.Load(), cap)
+		}
+	})
 }
 
 func TestCapacity(t *testing.T) {

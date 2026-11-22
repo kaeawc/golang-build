@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,95 +15,94 @@ import (
 )
 
 func TestInspectorAccumulatesAndRingBuffersEvents(t *testing.T) {
-	bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 64, DropWhenFull: true})
-	defer bus.Close()
-	insp := NewInspector(bus, 5)
-	defer insp.Stop()
-	insp.Start()
+	synctest.Test(t, func(t *testing.T) {
+		bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 64, DropWhenFull: true})
+		defer bus.Close()
+		insp := NewInspector(bus, 5)
+		defer insp.Stop()
+		insp.Start()
 
-	for i := range 10 {
-		level := "info"
-		if i%3 == 0 {
-			level = "warn"
+		for i := range 10 {
+			level := "info"
+			if i%3 == 0 {
+				level = "warn"
+			}
+			bus.Publish(Event{
+				At:      time.Now(),
+				Kind:    "request",
+				Level:   level,
+				Message: "n",
+			})
 		}
-		bus.Publish(Event{
-			At:      time.Now(),
-			Kind:    "request",
-			Level:   level,
-			Message: "n",
-		})
-	}
 
-	// Async delivery: poll until total reaches 10 or fail.
-	deadline := time.Now().Add(time.Second)
-	var snap Snapshot
-	for time.Now().Before(deadline) {
+		// Async delivery: wait for the subscriber goroutine to go idle.
+		synctest.Wait()
 		s, _ := insp.Sample()
-		snap = s.(Snapshot)
-		if snap.Total == 10 {
-			break
+		snap := s.(Snapshot)
+		if snap.Total != 10 {
+			t.Fatalf("expected 10 events, got %d", snap.Total)
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if snap.Total != 10 {
-		t.Fatalf("expected 10 events, got %d", snap.Total)
-	}
-	if len(snap.Recent) != 5 {
-		t.Errorf("ring should retain last 5, got %d", len(snap.Recent))
-	}
-	if snap.ByLevel["info"]+snap.ByLevel["warn"] != 10 {
-		t.Errorf("level totals don't add up: %v", snap.ByLevel)
-	}
-	if snap.ByKind["request"] != 10 {
-		t.Errorf("kind total wrong: %v", snap.ByKind)
-	}
+		if len(snap.Recent) != 5 {
+			t.Errorf("ring should retain last 5, got %d", len(snap.Recent))
+		}
+		if snap.ByLevel["info"]+snap.ByLevel["warn"] != 10 {
+			t.Errorf("level totals don't add up: %v", snap.ByLevel)
+		}
+		if snap.ByKind["request"] != 10 {
+			t.Errorf("kind total wrong: %v", snap.ByKind)
+		}
+	})
 }
 
 func TestInspectorStopFreezesElapsed(t *testing.T) {
-	bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 4})
-	defer bus.Close()
-	insp := NewInspector(bus, 3)
-	insp.Start()
+	synctest.Test(t, func(t *testing.T) {
+		bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 4})
+		defer bus.Close()
+		insp := NewInspector(bus, 3)
+		insp.Start()
 
-	time.Sleep(20 * time.Millisecond)
-	insp.Stop()
+		// Virtual time: advances the bubble clock without wall-clock delay.
+		time.Sleep(20 * time.Millisecond)
+		insp.Stop()
 
-	a, done := insp.Sample()
-	if !done {
-		t.Errorf("Sample should report done=true after Stop")
-	}
-	first := a.(Snapshot).Elapsed
+		a, done := insp.Sample()
+		if !done {
+			t.Errorf("Sample should report done=true after Stop")
+		}
+		first := a.(Snapshot).Elapsed
+		if first != 20*time.Millisecond {
+			t.Errorf("Elapsed at Stop = %v, want 20ms", first)
+		}
 
-	time.Sleep(20 * time.Millisecond)
-	b, _ := insp.Sample()
-	second := b.(Snapshot).Elapsed
-	if second != first {
-		t.Errorf("Elapsed should be frozen after Stop, got %v then %v", first, second)
-	}
+		time.Sleep(20 * time.Millisecond)
+		b, _ := insp.Sample()
+		second := b.(Snapshot).Elapsed
+		if second != first {
+			t.Errorf("Elapsed should be frozen after Stop, got %v then %v", first, second)
+		}
+	})
 }
 
 func TestInspectorReturnsCopiedMaps(t *testing.T) {
-	bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 4})
-	defer bus.Close()
-	insp := NewInspector(bus, 3)
-	defer insp.Stop()
-	insp.Start()
-	bus.Publish(Event{Kind: "x", Level: "info"})
-	// Wait for delivery.
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		s, _ := insp.Sample()
-		if s.(Snapshot).Total > 0 {
-			break
+	synctest.Test(t, func(t *testing.T) {
+		bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 4})
+		defer bus.Close()
+		insp := NewInspector(bus, 3)
+		defer insp.Stop()
+		insp.Start()
+		bus.Publish(Event{Kind: "x", Level: "info"})
+		synctest.Wait() // wait for delivery
+
+		a, _ := insp.Sample()
+		if a.(Snapshot).Total != 1 {
+			t.Fatalf("Total = %d, want 1", a.(Snapshot).Total)
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	a, _ := insp.Sample()
-	a.(Snapshot).ByLevel["info"] = 999
-	b, _ := insp.Sample()
-	if b.(Snapshot).ByLevel["info"] == 999 {
-		t.Errorf("Snapshot leaked map; mutation visible in next snapshot")
-	}
+		a.(Snapshot).ByLevel["info"] = 999
+		b, _ := insp.Sample()
+		if b.(Snapshot).ByLevel["info"] == 999 {
+			t.Errorf("Snapshot leaked map; mutation visible in next snapshot")
+		}
+	})
 }
 
 func TestScenarioByNameLookup(t *testing.T) {
@@ -117,56 +117,49 @@ func TestScenarioByNameLookup(t *testing.T) {
 }
 
 func TestRunSteadyPublishesUntilCanceled(t *testing.T) {
-	bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 256, DropWhenFull: true})
-	defer bus.Close()
-	insp := NewInspector(bus, 50)
-	defer insp.Stop()
-	insp.Start()
+	synctest.Test(t, func(t *testing.T) {
+		bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 256, DropWhenFull: true})
+		defer bus.Close()
+		insp := NewInspector(bus, 50)
+		defer insp.Stop()
+		insp.Start()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	runSteady(ctx, bus)
+		// Virtual time: the 100ms ticker fires at 100ms and 200ms before the
+		// 250ms deadline, instantly and deterministically.
+		ctx, cancel := context.WithTimeout(t.Context(), 250*time.Millisecond)
+		defer cancel()
+		runSteady(ctx, bus)
 
-	deadline := time.Now().Add(500 * time.Millisecond)
-	var total int64
-	for time.Now().Before(deadline) {
+		synctest.Wait()
 		s, _ := insp.Sample()
-		total = s.(Snapshot).Total
-		if total >= 2 {
-			break
+		if total := s.(Snapshot).Total; total != 2 {
+			t.Errorf("expected 2 steady events in 250ms, got %d", total)
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if total < 2 {
-		t.Errorf("expected at least 2 steady events in 250ms, got %d", total)
-	}
+	})
 }
 
 func TestRunNoisyEmitsMixedLevels(t *testing.T) {
-	bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 256, DropWhenFull: true})
-	defer bus.Close()
-	insp := NewInspector(bus, 100)
-	defer insp.Stop()
-	insp.Start()
+	synctest.Test(t, func(t *testing.T) {
+		bus := eventbus.NewAsync[Event](eventbus.AsyncConfig{BufferSize: 256, DropWhenFull: true})
+		defer bus.Close()
+		insp := NewInspector(bus, 100)
+		defer insp.Stop()
+		insp.Start()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	runNoisy(ctx, bus)
+		ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+		defer cancel()
+		runNoisy(ctx, bus)
 
-	// Drain.
-	deadline := time.Now().Add(time.Second)
-	var snap Snapshot
-	for time.Now().Before(deadline) {
+		synctest.Wait() // drain
 		s, _ := insp.Sample()
-		snap = s.(Snapshot)
-		if snap.Total >= 5 {
-			break
+		snap := s.(Snapshot)
+		if snap.Total < 5 {
+			t.Errorf("expected at least 5 noisy events in 500ms, got %d", snap.Total)
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(snap.ByLevel) < 2 {
-		t.Errorf("expected mixed levels, got %v", snap.ByLevel)
-	}
+		if len(snap.ByLevel) < 2 {
+			t.Errorf("expected mixed levels, got %v", snap.ByLevel)
+		}
+	})
 }
 
 // ---------- model flow -----------------------------------------------------
@@ -226,17 +219,19 @@ func TestModelGlobalQuitShutsDownProducer(t *testing.T) {
 // ---------- headless -------------------------------------------------------
 
 func TestRunHeadlessHappyPath(t *testing.T) {
-	var buf bytes.Buffer
-	if code := runHeadless(&buf, "steady", 200*time.Millisecond); code != 0 {
-		t.Fatalf("exit %d: %s", code, buf.String())
-	}
-	out := buf.String()
-	if !strings.Contains(out, "events:") {
-		t.Errorf("missing summary in output: %s", out)
-	}
-	if !strings.Contains(out, "stopped") {
-		t.Errorf("missing 'stopped' in output: %s", out)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var buf bytes.Buffer
+		if code := runHeadless(&buf, "steady", 200*time.Millisecond); code != 0 {
+			t.Fatalf("exit %d: %s", code, buf.String())
+		}
+		out := buf.String()
+		if !strings.Contains(out, "events:") {
+			t.Errorf("missing summary in output: %s", out)
+		}
+		if !strings.Contains(out, "stopped") {
+			t.Errorf("missing 'stopped' in output: %s", out)
+		}
+	})
 }
 
 func TestRunHeadlessRejectsBadScenario(t *testing.T) {
