@@ -273,9 +273,6 @@ func TestAPIMiddlewareWrapsOnlyAPIRoutes(t *testing.T) {
 	}
 }
 
-// TestInstrumentTracesRoutesAndJoinsLogs checks the otelhttp wrapper names
-// server spans after the ServeMux pattern, skips /healthz, and that the
-// request-scoped access log line carries the span's trace_id.
 func TestHTTPRoute(t *testing.T) {
 	for pattern, want := range map[string]string{
 		"GET /api/users":           "/api/users",
@@ -289,6 +286,9 @@ func TestHTTPRoute(t *testing.T) {
 	}
 }
 
+// TestInstrumentTracesRoutesAndJoinsLogs checks the otelhttp wrapper names
+// server spans after the ServeMux pattern, skips /healthz, and that the
+// request-scoped access log line carries the span's trace_id.
 func TestInstrumentTracesRoutesAndJoinsLogs(t *testing.T) {
 	rec := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec))
@@ -331,5 +331,39 @@ func TestInstrumentTracesRoutesAndJoinsLogs(t *testing.T) {
 	}
 	if access["msg"] != "http request" || access["trace_id"] != usersSpan.SpanContext().TraceID().String() {
 		t.Errorf("access log = %v, want trace_id %s", access, usersSpan.SpanContext().TraceID())
+	}
+}
+
+// Span names follow otelhttp's semconv naming (HEAD keeps its own method,
+// unknown methods become "HTTP"), and a request that panics past the
+// handler still gets its route.
+func TestInstrumentSpanNames(t *testing.T) {
+	rec := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec))
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /items/{id}", func(http.ResponseWriter, *http.Request) {})
+	mux.HandleFunc("GET /boom", func(http.ResponseWriter, *http.Request) { panic("boom") })
+	h := instrument(mux, otelhttp.WithTracerProvider(tp))
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodHead, "/items/7", nil))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("FOOBAR1234", "/items/7", nil))
+	func() {
+		defer func() { _ = recover() }()
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/boom", nil))
+	}()
+
+	var got []string
+	for _, s := range rec.Ended() {
+		route := ""
+		for _, a := range s.Attributes() {
+			if a.Key == "http.route" {
+				route = a.Value.AsString()
+			}
+		}
+		got = append(got, s.Name()+" route="+route)
+	}
+	want := []string{"HEAD /items/{id} route=/items/{id}", "HTTP route=", "GET /boom route=/boom"}
+	if !slices.Equal(got, want) {
+		t.Errorf("spans = %q, want %q", got, want)
 	}
 }

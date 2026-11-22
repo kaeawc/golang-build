@@ -16,19 +16,21 @@ Every `/api` request gets a request-scoped logger (`request_id`, `method`, `path
 
 ## Traces and metrics (OpenTelemetry, opt-in)
 
-`internal/telemetry.Setup` installs OpenTelemetry tracer and meter providers exporting OTLP over HTTP **only when an endpoint is configured**. Without one, the global no-op providers stay in place and the instrumentation below costs next to nothing.
+`internal/telemetry.Setup` installs OpenTelemetry tracer and/or meter providers exporting OTLP over HTTP, **each only when an endpoint is configured for that signal**. Without one, the global no-op provider stays in place and the instrumentation below costs next to nothing. Like the OTel SDKs, it reads the standard process environment variables. SDK errors, such as failed exports, are logged through slog as `opentelemetry` warnings.
 
 | Variable | Effect |
 |---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables telemetry; e.g. `http://otel-lgtm:4318`. Per-signal `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` / `..._METRICS_ENDPOINT` also enable it. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables traces and metrics, e.g. `http://otel-lgtm:4318`. |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` / `..._METRICS_ENDPOINT` | Enables just that signal (full URL, e.g. `https://tempo.example/v1/traces`). |
+| `OTEL_TRACES_EXPORTER=none` / `OTEL_METRICS_EXPORTER=none` | Turns one signal off even with the shared endpoint set. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers for a hosted backend (`key=value,...`). Set as a Fly secret. |
 | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | Sampling. Default is parent-based always-on; for production traffic use e.g. `parentbased_traceidratio` with `0.01`. |
-| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes. `service.name`, `service.version` and `deployment.environment.name` are set by the server. |
+| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Resource attributes. The server sets `service.name`, `service.version` and `deployment.environment.name`; these variables override them. |
 | `OTEL_SDK_DISABLED=true` | Forces telemetry off even with an endpoint set. |
 
 What is instrumented:
 
-- **HTTP server**: `otelhttp` around the router. Spans are named after the matched ServeMux pattern (`GET /api/users`) with `http.route`; requests that match nothing (405, redirects) are named by method. W3C `traceparent` headers are honored. Emits `http.server.request.duration` and body-size metrics.
+- **HTTP server**: `otelhttp` around the router. Spans are named `{METHOD} {route}` from the matched ServeMux pattern (`GET /api/users`, `HEAD /api/users`) with `http.route`. Requests that match nothing (405, redirects) are named by method only, and non-standard methods become `HTTP`, so clients can't create arbitrary span names. W3C `traceparent` headers are honored. Emits `http.server.request.duration` and body-size metrics.
 - **Postgres**: `otelpgx` tracer on the pgx pool (a span per query) plus pool stats metrics.
 - **River jobs**: `otelriver` middleware (spans for insert and work, `river.*` metrics).
 - **Go runtime**: memory, GC and goroutine metrics.

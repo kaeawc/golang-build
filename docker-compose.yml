@@ -46,6 +46,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      otel-lgtm:
+        condition: service_started
 
   # Grafana + Tempo + Prometheus + Loki with an OTLP endpoint, for viewing
   # the server's traces and metrics locally: http://localhost:3000.

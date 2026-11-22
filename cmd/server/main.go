@@ -88,10 +88,11 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 	// Opt-in: a no-op unless OTEL_EXPORTER_OTLP_ENDPOINT (or a per-signal
 	// endpoint) is set. Registered first so it runs last and flushes the
 	// spans the other hooks produce.
-	stopTelemetry, err := telemetry.Setup(ctx, r, telemetry.Service{
+	stopTelemetry, err := telemetry.Setup(ctx, telemetry.Service{
 		Name:        "golang-build-server",
 		Version:     buildVersion(),
 		Environment: string(cfg.Environment),
+		Logger:      log,
 	})
 	if err != nil {
 		return err
@@ -152,41 +153,50 @@ func startJobs(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, coord 
 }
 
 // instrument wraps the router in OpenTelemetry HTTP server tracing and
-// metrics. Spans are named after the matched ServeMux pattern ("GET
-// /api/users"), or the bare method when nothing matched (405, redirect).
-// /healthz is not traced: Fly probes it every ~15s.
+// metrics. otelhttp names spans "{METHOD} {route}" from the matched
+// ServeMux pattern (just the method when nothing matched, "HTTP" for
+// non-standard methods). /healthz is not traced: Fly probes it every ~15s.
 func instrument(h http.Handler, opts ...otelhttp.Option) http.Handler {
 	opts = append([]otelhttp.Option{
-		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
-			if r.Pattern != "" {
-				return r.Pattern
-			}
-			return r.Method
-		}),
 		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }),
 	}, opts...)
 	// ServeMux sets r.Pattern on the request it is given, so read it after
 	// routing to add http.route to the span (otelhttp only adds it to
-	// metrics).
+	// metrics). Deferred so a request that panics past the handler still
+	// gets its route and name; otelhttp's own rename is skipped then.
 	routed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			route := httpRoute(r.Pattern)
+			if route == "" {
+				return
+			}
+			span := trace.SpanFromContext(r.Context())
+			span.SetAttributes(semconv.HTTPRoute(route))
+			span.SetName(spanMethod(r.Method) + " " + route)
+		}()
 		h.ServeHTTP(w, r)
-		if route := httpRoute(r.Pattern); route != "" {
-			trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(route))
-		}
 	})
 	return otelhttp.NewHandler(routed, "http.server", opts...)
+}
+
+// spanMethod mirrors otelhttp's span naming: standard methods as-is,
+// anything else as "HTTP", so clients cannot mint span names.
+func spanMethod(m string) string {
+	switch m = strings.ToUpper(m); m {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+		http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace:
+		return m
+	}
+	return "HTTP"
 }
 
 // httpRoute strips the method and host from a ServeMux pattern:
 // "GET example.com/api/{id}" → "/api/{id}".
 func httpRoute(pattern string) string {
-	if _, rest, ok := strings.Cut(pattern, " "); ok {
-		pattern = rest
+	if i := strings.IndexByte(pattern, '/'); i >= 0 {
+		return pattern[i:]
 	}
-	if i := strings.IndexByte(pattern, '/'); i > 0 {
-		pattern = pattern[i:]
-	}
-	return pattern
+	return ""
 }
 
 // buildVersion reports the module version, or the VCS revision for local
