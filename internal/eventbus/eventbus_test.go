@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -102,24 +103,22 @@ func TestSyncDeliveryOrderMatchesSubscriptionOrder(t *testing.T) {
 }
 
 func TestAsyncDeliversEventually(t *testing.T) {
-	bus := NewAsync[int](AsyncConfig{})
-	defer bus.Close()
+	synctest.Test(t, func(t *testing.T) {
+		bus := NewAsync[int](AsyncConfig{})
+		defer bus.Close()
 
-	var got atomic.Int32
-	bus.Subscribe(func(int) { got.Add(1) })
+		var got atomic.Int32
+		bus.Subscribe(func(int) { got.Add(1) })
 
-	for i := range 10 {
-		bus.Publish(i)
-	}
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if got.Load() == 10 {
-			return
+		for i := range 10 {
+			bus.Publish(i)
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Errorf("Async delivery: got %d, want 10", got.Load())
+
+		synctest.Wait()
+		if got.Load() != 10 {
+			t.Errorf("Async delivery: got %d, want 10", got.Load())
+		}
+	})
 }
 
 func TestAsyncDropWhenFull(t *testing.T) {
@@ -140,49 +139,50 @@ func TestAsyncDropWhenFull(t *testing.T) {
 }
 
 func TestAsyncSlowSubscriberDoesNotBlockOthers(t *testing.T) {
-	bus := NewAsync[int](AsyncConfig{BufferSize: 64, DropWhenFull: true})
-	defer bus.Close()
+	synctest.Test(t, func(t *testing.T) {
+		bus := NewAsync[int](AsyncConfig{BufferSize: 64, DropWhenFull: true})
+		defer bus.Close()
 
-	hold := make(chan struct{})
-	bus.Subscribe(func(int) { <-hold })
+		hold := make(chan struct{})
+		bus.Subscribe(func(int) { <-hold })
 
-	var fastGot atomic.Int32
-	bus.Subscribe(func(int) { fastGot.Add(1) })
+		var fastGot atomic.Int32
+		bus.Subscribe(func(int) { fastGot.Add(1) })
 
-	for i := range 50 {
-		bus.Publish(i)
-	}
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if fastGot.Load() == 50 {
-			break
+		for i := range 50 {
+			bus.Publish(i)
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if fastGot.Load() != 50 {
-		t.Errorf("fast subscriber got %d, want 50", fastGot.Load())
-	}
-	close(hold)
+
+		// The slow subscriber stays parked on hold while the fast one drains.
+		synctest.Wait()
+		if fastGot.Load() != 50 {
+			t.Errorf("fast subscriber got %d, want 50", fastGot.Load())
+		}
+		close(hold)
+	})
 }
 
 func TestAsyncCloseDrainsQueue(t *testing.T) {
-	bus := NewAsync[int](AsyncConfig{BufferSize: 16})
+	synctest.Test(t, func(t *testing.T) {
+		bus := NewAsync[int](AsyncConfig{BufferSize: 16})
 
-	var got atomic.Int32
-	bus.Subscribe(func(int) {
-		time.Sleep(5 * time.Millisecond)
-		got.Add(1)
+		var got atomic.Int32
+		bus.Subscribe(func(int) {
+			// Virtual time: the handler is slow, so events are still
+			// queued when Close is called, but the test takes no wall time.
+			time.Sleep(5 * time.Millisecond)
+			got.Add(1)
+		})
+
+		for i := range 10 {
+			bus.Publish(i)
+		}
+		bus.Close()
+
+		if got.Load() != 10 {
+			t.Errorf("after Close: got = %d, want 10 (Close should drain)", got.Load())
+		}
 	})
-
-	for i := range 10 {
-		bus.Publish(i)
-	}
-	bus.Close()
-
-	if got.Load() != 10 {
-		t.Errorf("after Close: got = %d, want 10 (Close should drain)", got.Load())
-	}
 }
 
 func TestAsyncPublishAfterCloseIsNoop(t *testing.T) {
@@ -198,46 +198,46 @@ func TestAsyncPublishAfterCloseIsNoop(t *testing.T) {
 }
 
 func TestAsyncUnsubscribeStopsDelivery(t *testing.T) {
-	bus := NewAsync[int](AsyncConfig{})
-	defer bus.Close()
+	synctest.Test(t, func(t *testing.T) {
+		bus := NewAsync[int](AsyncConfig{})
+		defer bus.Close()
 
-	var got atomic.Int32
-	off := bus.Subscribe(func(int) { got.Add(1) })
+		var got atomic.Int32
+		off := bus.Subscribe(func(int) { got.Add(1) })
 
-	bus.Publish(1)
-	time.Sleep(20 * time.Millisecond)
-	off()
-	bus.Publish(2)
-	time.Sleep(20 * time.Millisecond)
+		bus.Publish(1)
+		synctest.Wait()
+		off()
+		bus.Publish(2)
+		synctest.Wait()
 
-	if got.Load() != 1 {
-		t.Errorf("got = %d, want 1", got.Load())
-	}
+		if got.Load() != 1 {
+			t.Errorf("got = %d, want 1", got.Load())
+		}
+	})
 }
 
 func TestAsyncConcurrentPublish(t *testing.T) {
-	bus := NewAsync[int](AsyncConfig{BufferSize: 1024})
-	defer bus.Close()
+	synctest.Test(t, func(t *testing.T) {
+		bus := NewAsync[int](AsyncConfig{BufferSize: 1024})
+		defer bus.Close()
 
-	var got atomic.Int32
-	bus.Subscribe(func(int) { got.Add(1) })
+		var got atomic.Int32
+		bus.Subscribe(func(int) { got.Add(1) })
 
-	var wg sync.WaitGroup
-	for i := range 100 {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			bus.Publish(i)
-		}(i)
-	}
-	wg.Wait()
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if got.Load() == 100 {
-			return
+		var wg sync.WaitGroup
+		for i := range 100 {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				bus.Publish(i)
+			}(i)
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Errorf("concurrent Publish: got %d, want 100", got.Load())
+		wg.Wait()
+
+		synctest.Wait()
+		if got.Load() != 100 {
+			t.Errorf("concurrent Publish: got %d, want 100", got.Load())
+		}
+	})
 }

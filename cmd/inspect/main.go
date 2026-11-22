@@ -20,6 +20,8 @@ import (
 	"os"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/kaeawc/golang-build/internal/eventbus"
 	"github.com/kaeawc/golang-build/internal/tui"
 )
@@ -86,6 +88,7 @@ func runHeadless(out io.Writer, name string, dur time.Duration) int {
 	bus.Close()
 
 	snap, _ := insp.Sample()
-	fmt.Fprintln(out, renderFinal(snap.(Snapshot)))
+	// lipgloss v2 always emits ANSI; Fprintln downsamples for the writer.
+	_, _ = lipgloss.Fprintln(out, renderFinal(snap.(Snapshot)))
 	return 0
 }

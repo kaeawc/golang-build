@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // ConfirmDoneMsg is emitted when the user picks yes or no in a Confirm
@@ -31,7 +31,7 @@ func NewConfirm(tag, title, description string, defaultYes bool) Confirm {
 }
 
 func (c Confirm) Update(msg tea.Msg) (Phase, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return c, nil
 	}
@@ -40,7 +40,7 @@ func (c Confirm) Update(msg tea.Msg) (Phase, tea.Cmd) {
 		c.cursor = 0
 	case "right", "l", "n", "N":
 		c.cursor = 1
-	case "enter", " ":
+	case "enter", "space":
 		yes := c.cursor == 0
 		tag := c.tag
 		return c, func() tea.Msg { return ConfirmDoneMsg{Tag: tag, Yes: yes} }

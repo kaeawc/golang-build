@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -188,28 +189,31 @@ func TestRegisterReplacesByName(t *testing.T) {
 }
 
 func TestProbesRunInParallel(t *testing.T) {
-	r := NewRegistry(WithProbeTimeout(time.Second))
-	const n = 4
-	const probeDelay = 80 * time.Millisecond
-	for i := range n {
-		name := string(rune('a' + i))
-		r.RegisterReadiness(name, func(context.Context) error {
-			time.Sleep(probeDelay)
-			return nil
-		})
-	}
+	synctest.Test(t, func(t *testing.T) {
+		r := NewRegistry(WithProbeTimeout(time.Second))
+		const n = 4
+		const probeDelay = 80 * time.Millisecond
+		for i := range n {
+			name := string(rune('a' + i))
+			r.RegisterReadiness(name, func(context.Context) error {
+				time.Sleep(probeDelay) // virtual time
+				return nil
+			})
+		}
 
-	start := time.Now()
-	rep := r.CheckReadiness(context.Background())
-	elapsed := time.Since(start)
+		start := time.Now()
+		rep := r.CheckReadiness(context.Background())
+		elapsed := time.Since(start)
 
-	if rep.Status != StatusOK {
-		t.Errorf("Status = %q, want %q", rep.Status, StatusOK)
-	}
-	// Sequential would take n*probeDelay = 320ms; parallel should be ~probeDelay.
-	if elapsed >= 2*probeDelay {
-		t.Errorf("elapsed %v ≥ %v — probes did not run in parallel", elapsed, 2*probeDelay)
-	}
+		if rep.Status != StatusOK {
+			t.Errorf("Status = %q, want %q", rep.Status, StatusOK)
+		}
+		// Sequential would take n*probeDelay = 320ms; parallel takes exactly
+		// probeDelay on the bubble's clock.
+		if elapsed != probeDelay {
+			t.Errorf("elapsed %v, want %v — probes did not run in parallel", elapsed, probeDelay)
+		}
+	})
 }
 
 func TestConcurrentRegisterAndCheck(t *testing.T) {

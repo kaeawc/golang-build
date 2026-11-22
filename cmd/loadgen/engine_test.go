@@ -6,8 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -107,26 +109,34 @@ func TestEngineRecordsBadStatusAsError(t *testing.T) {
 }
 
 func TestEngineRespectsContextCancellation(t *testing.T) {
-	client := &fakeClient{status: 200, delay: 10 * time.Millisecond}
-	eng := NewEngine(Config{
-		URL:         "http://example.invalid",
-		Concurrency: 2,
-		Duration:    time.Hour,
-		Client:      client,
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
+	synctest.Test(t, func(t *testing.T) {
+		client := &fakeClient{status: 200, delay: 10 * time.Millisecond}
+		eng := NewEngine(Config{
+			URL:         "http://example.invalid",
+			Concurrency: 2,
+			Duration:    time.Hour,
+			Client:      client,
+		})
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		done := make(chan struct{})
+		go func() { eng.Start(ctx); close(done) }()
+
+		// Virtual time: let the workers run a few 10ms requests, then cancel
+		// mid-run, an hour before the configured Duration ends.
 		time.Sleep(50 * time.Millisecond)
 		cancel()
-	}()
-	done := make(chan struct{})
-	go func() { eng.Start(ctx); close(done) }()
+		synctest.Wait()
 
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("engine did not honor cancel")
-	}
+		select {
+		case <-done:
+		default:
+			t.Fatalf("engine did not honor cancel")
+		}
+		if snap := eng.Snapshot(); !snap.Done || snap.Total == 0 {
+			t.Errorf("snapshot after cancel = %+v, want Done with requests recorded", snap)
+		}
+	})
 }
 
 func TestPercentilesEmpty(t *testing.T) {
@@ -208,6 +218,9 @@ func TestHeadlessRunsAgainstTestServer(t *testing.T) {
 	}
 	if buf.Len() == 0 {
 		t.Errorf("expected output written")
+	}
+	if strings.Contains(buf.String(), "\x1b[") {
+		t.Errorf("headless output to a non-terminal must not contain ANSI escapes: %q", buf.String())
 	}
 }
 

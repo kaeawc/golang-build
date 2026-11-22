@@ -1,1 +1,9 @@
-blank_issues_enabled: true
+# Issue forms only; blank issues are off so reports carry the details above.
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/kaeawc/golang-build/security/advisories/new
+    about: Report privately through GitHub security advisories, not in a public issue.
+  - name: Using the template
+    url: https://github.com/kaeawc/golang-build#start-your-own-project
+    about: Renaming the module, trimming demo binaries, CI and releases.

@@ -67,6 +67,7 @@ Use focused package tests while iterating: `go test ./internal/handlers/ -run Te
 - `internal/perf/` — local-only timing tracker (no OpenTelemetry, no exporter). `New(false)` is a zero-overhead no-op; `New(true)` records nested phases via `Serial(name) … End()` or via the `defer`-friendly `NewSpan(t, name).Stop()` API (spans support `SetAttr` and `AddMetric`). `NewWithClock(clock.Fake)` makes timing assertions deterministic. `RenderTree(w, entries, RenderOptions{})` prints an ASCII tree with durations and parent-percent (`├─ scan  180ms  90%`); `Summary(entries, topN)` flattens to a "where did time go" list. Designed for CLI tools that want to print their own perf summary at exit.
 - `ci/Dockerfile` — multi-stage build (bun frontend → Go binary cross-compiled with `-trimpath` → `distroless/static` non-root runtime). Base images pinned by digest.
 - `tools/` — separate module pinning dev tools via `tool` directives.
+- `scripts/rename-module/` — `make rename MODULE=... [NAME=...]`: rewrites module path and project name, then `go mod tidy` + `make check`.
 - `.goreleaser.yaml` — release archives for every binary; `.github/workflows/release.yml` runs it on `v*` tags.
 - `scripts/` — release-check, workflow validation, and other repo-wide bash scripts.
 - `sql/`, `sqlc.yaml` — SQL schema and sqlc config.
@@ -74,7 +75,7 @@ Use focused package tests while iterating: `go test ./internal/handlers/ -run Te
 ## CI
 
 `.github/workflows/commit.yml` runs on PRs and pushes to `main`:
-`compile-binary`, `build-image` (pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security` (gosec), `vulnerabilities` (govulncheck), `release-config` (goreleaser check), `codeql-analysis`. Each job is a `make` target, so `make ci` reproduces it locally. Go version comes from `go.mod`.
+`compile-binary`, `build-image` (pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security` (gosec), `vulnerabilities` (govulncheck), `release-config` (goreleaser check), `template-rename` (`make rename-test`: rename a scratch copy, then check + build), `codeql-analysis`. Each job is a `make` target, so `make ci` reproduces it locally. Go version comes from `go.mod`.
 `deploy.yml` deploys to Fly after `commit.yml` succeeds on a push to `main`; `release.yml` publishes on `v*` tags; `fuzz.yml` fuzzes every `Fuzz*` target nightly and uploads failing inputs. Fuzz/bench conventions: `docs/testing.md`.
 
 ## Conventions
