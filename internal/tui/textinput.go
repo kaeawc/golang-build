@@ -3,8 +3,9 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // TextInputDoneMsg is emitted when the user submits a non-empty value
@@ -33,6 +34,12 @@ func NewTextInput(tag, title, prompt, placeholder string, validate func(string) 
 	ti.Placeholder = placeholder
 	ti.Prompt = "> "
 	ti.CharLimit = 128
+	// v2 defaults tint the prompt and cursor with ANSI color 7, which
+	// vanishes on light backgrounds; keep both unstyled as in v1.
+	styles := ti.Styles()
+	styles.Focused.Prompt = lipgloss.NewStyle()
+	styles.Cursor.Color = lipgloss.NoColor{}
+	ti.SetStyles(styles)
 	ti.Focus()
 	return TextInput{
 		tag:      tag,
@@ -48,7 +55,7 @@ func (t TextInput) Init() tea.Cmd {
 }
 
 func (t TextInput) Update(msg tea.Msg) (Phase, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok && km.Type == tea.KeyEnter {
+	if km, ok := msg.(tea.KeyPressMsg); ok && km.Code == tea.KeyEnter {
 		val := strings.TrimSpace(t.input.Value())
 		if val == "" {
 			t.errMsg = "value is required"
@@ -66,9 +73,18 @@ func (t TextInput) Update(msg tea.Msg) (Phase, tea.Cmd) {
 
 	var cmd tea.Cmd
 	t.input, cmd = t.input.Update(msg)
-	t.errMsg = "" // any keystroke clears the error
+	// Only user input clears the error; blink ticks and window or
+	// terminal capability messages must not.
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.PasteMsg:
+		t.errMsg = ""
+	}
 	return t, cmd
 }
+
+// CapturesText reports that bare letters (including "q") belong to the
+// input rather than to global shortcuts.
+func (t TextInput) CapturesText() bool { return true }
 
 func (t TextInput) View() string {
 	var b strings.Builder
@@ -86,6 +102,6 @@ func (t TextInput) View() string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(DimStyle.Render("type to enter · enter submit · q quit"))
+	b.WriteString(DimStyle.Render("type to enter · enter submit · ctrl+c quit"))
 	return b.String()
 }

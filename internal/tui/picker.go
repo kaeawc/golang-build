@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // PickerItem is one row in a Picker. Label is the primary identifier
@@ -42,7 +42,7 @@ func NewPicker(tag, title string, headers []string, items []PickerItem) Picker {
 }
 
 func (p Picker) Update(msg tea.Msg) (Phase, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return p, nil
 	}
@@ -55,7 +55,7 @@ func (p Picker) Update(msg tea.Msg) (Phase, tea.Cmd) {
 		if p.cursor < len(p.items)-1 {
 			p.cursor++
 		}
-	case "enter", " ":
+	case "enter", "space":
 		idx := p.cursor
 		item := p.items[idx]
 		tag := p.tag
