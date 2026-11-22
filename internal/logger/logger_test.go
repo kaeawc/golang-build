@@ -166,3 +166,38 @@ func TestLoggerEnabledOnSlogImpl(t *testing.T) {
 		t.Error("Enabled(Error) at Warn threshold should be true")
 	}
 }
+
+func TestFromContext(t *testing.T) {
+	if got := FromContext(context.Background()); got != slog.Default() {
+		t.Errorf("FromContext without a logger = %p, want slog.Default()", got)
+	}
+	l := slog.New(slog.DiscardHandler)
+	if got := FromContext(WithContext(context.Background(), l)); got != l {
+		t.Errorf("FromContext did not return the stored logger")
+	}
+}
+
+func TestParseFormat(t *testing.T) {
+	for in, want := range map[string]Format{"json": FormatJSON, "JSON": FormatJSON, "text": FormatText} {
+		got, err := ParseFormat(in)
+		if err != nil || got != want {
+			t.Errorf("ParseFormat(%q) = %v, %v; want %v", in, got, err, want)
+		}
+	}
+	if _, err := ParseFormat("yaml"); err == nil {
+		t.Error("ParseFormat(yaml) should fail")
+	}
+}
+
+func TestNewSlogFormats(t *testing.T) {
+	var buf bytes.Buffer
+	NewSlog(Config{Writer: &buf, Format: FormatText}).Info("hi", "k", 1)
+	if got := buf.String(); !strings.Contains(got, "msg=hi k=1") {
+		t.Errorf("text output = %q", got)
+	}
+	buf.Reset()
+	NewSlog(Config{Writer: &buf, Format: FormatJSON, Level: slog.LevelWarn}).Info("dropped")
+	if buf.Len() != 0 {
+		t.Errorf("info record passed a warn-level logger: %q", buf.String())
+	}
+}

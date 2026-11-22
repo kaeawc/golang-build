@@ -10,7 +10,7 @@ Start a new project from it, run `make rename`, delete what you don't need.
 ## What's included
 
 - **HTTP API** (`cmd/server`) on `:8080`, routed with `net/http` ServeMux
-  (the /api routes behind a logging → recover → traffic → gzip →
+  (the /api routes behind a request-id → logging → recover → traffic → gzip →
   content-type middleware chain), with
   Postgres (pgx + sqlc + golang-migrate), Valkey, and River background jobs.
 - **Terminal tools** built on a small reusable TUI framework
@@ -142,9 +142,19 @@ The TUIs run without a database:
 | `make tidy` | Tidy go.mod in the app and tools modules |
 | `make check` | Fast pre-push gate |
 | `make ci` | Everything CI runs (except CodeQL and the image build) |
+| `make pgo` | Regenerate cmd/server/default.pgo from a DURATION-second (default 30) load run |
 | `make release-snapshot` | Build a local goreleaser snapshot into dist/ (needs goreleaser) |
 | `make rename` | Make the template yours: make rename MODULE=github.com/you/app [NAME=app] |
 | `make rename-test` | Rename a scratch copy to a throwaway module, then lint, test and build it |
+
+### Profile-guided optimization
+
+The server builds with PGO from the committed `cmd/server/default.pgo`. Go
+picks it up automatically, including in `ci/Dockerfile` and goreleaser.
+`make pgo` regenerates it: it drives the router with headless `cmd/loadgen`
+and pulls a CPU profile from the loopback-only debug listener (`DEBUG_ADDR`).
+[docs/pgo.md](docs/pgo.md) covers when to refresh the profile and how to
+measure the gain.
 
 ## Testing
 
@@ -214,6 +224,10 @@ What each binary pulls in from `internal/`:
 | Binary | Delete with it (if nothing else uses them) |
 | --- | --- |
 | `onboard`, `loadgen`, `scaffold`, `migrate` | `internal/tui` once all TUIs are gone |
+
+`make pgo` builds `cmd/loadgen`. If you delete loadgen, also delete the `pgo`
+Makefile target and `scripts/pgo.sh`. The committed `cmd/server/default.pgo`
+keeps working until the next time you'd refresh it.
 | `admin` | `internal/tui` |
 | `devup` | `internal/proc`, `internal/tui` |
 | `inspect` | `internal/eventbus`, `internal/tui` |
@@ -222,7 +236,7 @@ What each binary pulls in from `internal/`:
 **Removing the server** (e.g. for a CLI-only project) also means deleting
 `ci/Dockerfile`, `fly.toml`, `docker-compose.yml`, `scripts/dev.sh`,
 `scripts/preview-deploy.sh`, `deploy.yml`, `preview.yml`, the `build-image`
-job in `commit.yml`, the `docker` and `run` Makefile targets, and the
+job in `commit.yml`, the `docker`, `run` and `pgo` Makefile targets (and `scripts/pgo.sh`, `docs/pgo.md`), and the
 Docker entry in `.github/dependabot.yml`. `web/`, `sql/`, `sqlc.yaml` and
 the bun files (`package.json`, `bun.lock`, `turbo.json`) exist only for the
 server.

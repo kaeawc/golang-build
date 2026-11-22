@@ -3,7 +3,7 @@ package jobs
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/riverqueue/river"
@@ -29,17 +29,23 @@ func (PingArgs) InsertOpts() river.InsertOpts {
 
 type PingWorker struct {
 	river.WorkerDefaults[PingArgs]
+	log *slog.Logger
 }
 
-func (*PingWorker) Work(_ context.Context, job *river.Job[PingArgs]) error {
-	log.Printf("jobs.ping: %s (scheduled=%s)", job.Args.Message, job.ScheduledAt.Format(time.RFC3339))
+func (w *PingWorker) Work(ctx context.Context, job *river.Job[PingArgs]) error {
+	w.log.InfoContext(ctx, "jobs.ping",
+		"job_id", job.ID,
+		"message", job.Args.Message,
+		"scheduled_at", job.ScheduledAt.Format(time.RFC3339),
+	)
 	return nil
 }
 
 func (*PingWorker) Timeout(*river.Job[PingArgs]) time.Duration { return 30 * time.Second }
 
-func NewWorkers() *river.Workers {
+// NewWorkers registers every worker; they log through log.
+func NewWorkers(log *slog.Logger) *river.Workers {
 	w := river.NewWorkers()
-	river.AddWorker(w, &PingWorker{})
+	river.AddWorker(w, &PingWorker{log: log})
 	return w
 }

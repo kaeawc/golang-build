@@ -6,8 +6,13 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
+	"net"
+	"net/netip"
+	"strings"
 
 	"github.com/kaeawc/golang-build/internal/env"
+	"github.com/kaeawc/golang-build/internal/logger"
 )
 
 type Environment string
@@ -45,6 +50,18 @@ type Config struct {
 	MigrationDatabaseURL string
 	ValkeyAddr           string
 	Fly                  Fly
+	// LogLevel comes from LOG_LEVEL (debug, info, warn, error; default info).
+	LogLevel slog.Level
+	// LogFormat comes from LOG_FORMAT (json or text). Defaults to text in
+	// development and JSON everywhere else.
+	LogFormat logger.Format
+	// DebugAddr comes from DEBUG_ADDR: the listen address of the pprof
+	// debug server (e.g. 127.0.0.1:6060). Empty disables it. The host
+	// must be loopback unless DebugAllowNonLoopback is set.
+	DebugAddr string
+	// DebugAllowNonLoopback comes from DEBUG_ALLOW_NON_LOOPBACK (default
+	// false).
+	DebugAllowNonLoopback bool
 }
 
 func Load(r env.Reader) (*Config, error) {
@@ -67,6 +84,14 @@ func Load(r env.Reader) (*Config, error) {
 	if !envName.Valid() {
 		return nil, fmt.Errorf("ENVIRONMENT %q: must be one of %s, %s, %s", envName, EnvDevelopment, EnvPreview, EnvProduction)
 	}
+	level, format, err := loadLogging(r, envName)
+	if err != nil {
+		return nil, err
+	}
+	debugAddr, debugAllowNonLoopback, err := loadDebug(r)
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		Port:                 port,
 		Environment:          envName,
@@ -79,5 +104,63 @@ func Load(r env.Reader) (*Config, error) {
 			MachineID: env.GetTrim(r, "FLY_MACHINE_ID"),
 			PublicIP:  env.GetTrim(r, "FLY_PUBLIC_IP"),
 		},
+		LogLevel:              level,
+		LogFormat:             format,
+		DebugAddr:             debugAddr,
+		DebugAllowNonLoopback: debugAllowNonLoopback,
 	}, nil
+}
+
+// loadDebug reads DEBUG_ADDR and DEBUG_ALLOW_NON_LOOPBACK. pprof exposes
+// heap contents, command lines and CPU-burning endpoints, so a host that
+// is not loopback (including an empty host, which binds every interface)
+// is refused unless DEBUG_ALLOW_NON_LOOPBACK opts in. The debug server
+// checks the bound address again, which also catches a "localhost" that
+// resolves elsewhere.
+func loadDebug(r env.Reader) (addr string, allowNonLoopback bool, err error) {
+	addr = env.GetTrim(r, "DEBUG_ADDR")
+	if addr == "" {
+		return "", false, nil
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", false, fmt.Errorf("DEBUG_ADDR %q: %w", addr, err)
+	}
+	allowNonLoopback, err = env.GetBool(r, "DEBUG_ALLOW_NON_LOOPBACK", false)
+	if err != nil {
+		return "", false, err
+	}
+	if !allowNonLoopback && !isLoopbackHost(host) {
+		return "", false, fmt.Errorf("DEBUG_ADDR %q: host must be loopback (127.0.0.1, ::1 or localhost); set DEBUG_ALLOW_NON_LOOPBACK=true to expose pprof beyond this machine", addr)
+	}
+	return addr, allowNonLoopback, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
+}
+
+func loadLogging(r env.Reader, envName Environment) (slog.Level, logger.Format, error) {
+	level := slog.LevelInfo
+	if v := env.GetTrim(r, "LOG_LEVEL"); v != "" {
+		if err := level.UnmarshalText([]byte(v)); err != nil {
+			return 0, 0, fmt.Errorf("LOG_LEVEL %q: must be debug, info, warn or error", v)
+		}
+	}
+	format := logger.FormatJSON
+	if envName == EnvDevelopment {
+		format = logger.FormatText
+	}
+	if v := env.GetTrim(r, "LOG_FORMAT"); v != "" {
+		f, err := logger.ParseFormat(v)
+		if err != nil {
+			return 0, 0, fmt.Errorf("LOG_FORMAT: %w", err)
+		}
+		format = f
+	}
+	return level, format, nil
 }

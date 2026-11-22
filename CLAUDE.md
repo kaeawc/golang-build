@@ -25,6 +25,7 @@ make licenses        # go-licenses check
 make check           # Fast pre-push gate; make ci runs everything CI does
 make docker          # Build the server image from ci/Dockerfile
 make rename MODULE=github.com/you/app [NAME=app]   # Rename module + project (scripts/rename-module); make rename-test proves it
+make pgo             # Regenerate cmd/server/default.pgo (DURATION=30 seconds of load)
 ```
 
 Dev tools are pinned in `tools/go.mod` with `tool` directives and run via
@@ -33,6 +34,7 @@ install beyond Go.
 
 ## Architecture
 
+- **`cmd/server/debug.go`** — pprof on a separate debug listener (`DEBUG_ADDR`, disabled by default, loopback-only unless `DEBUG_ALLOW_NON_LOOPBACK`), never on the public mux. `default.pgo` next to it is the committed PGO profile; `make pgo` regenerates it via the harness in `pgo_harness_test.go`. See `docs/pgo.md`.
 - **`cmd/server/main.go`** — Entry point. `buildRouter` registers `http.ServeMux` patterns (`"GET /api/users"`, SPA on `"GET /"`, so wrong methods get 405) and wraps each `/api` route in the `httpmw.Compose` chain (Logging → Recover → Traffic → Gzip → ContentType), then starts the HTTP server.
 - **`cmd/onboard/`** — TUI wizard that walks the user through generating a `.env` for the server. Demonstrates the `internal/tui` framework.
 - **`cmd/loadgen/`** — TUI HTTP load generator with a live-updating dashboard. Demonstrates the `LiveView` phase.
@@ -45,6 +47,7 @@ install beyond Go.
 - **`cmd/mcpclient/`** — Plain CLI MCP client (not a TUI). `demo` walks every server feature over stdio (spawns `cmd/mcp` via `CommandTransport`) or HTTP (`-url`); `-protocol 2025-11-25` pins the legacy protocol; `-yes` auto-answers elicitations.
 - **`internal/mcpserver/`** — `New(Deps) *mcp.Server` and `NewHTTPHandler`. Targets MCP spec 2026-07-28 (stateless HTTP, `server/discover`, multi round-trip elicitation, cacheable lists) with 2025-11-25 compatibility. Has a `UserStore` interface with `MemoryStore` (fake) and `PgxStore` (internal/db). Tests use `mcp.NewInMemoryTransports`, `testing/synctest`, and httptest; the Postgres contract test runs only when `MCP_TEST_DATABASE_URL` is set.
 - **`internal/handlers/`** — Route handlers. Handlers return `http.HandlerFunc` closures.
+- **`internal/logger/`** — slog setup (`NewSlog`, JSON or text via `LOG_FORMAT`, level via `LOG_LEVEL`) and `WithContext`/`FromContext` for request-scoped loggers. Log with `log/slog`, never the `log` package.
 - **`internal/middleware/`** — HTTP middleware (logging, panic recovery, content-type detection). Each middleware is a `func(http.Handler) http.Handler`, composed with `httpmw.Compose` and applied per route (see `handleAPI` in `cmd/server/main.go`).
 - **`internal/tui/`** — Reusable TUI scaffolding built on bubbletea/lipgloss. Exports a `Phase` interface and reusable phases (`Picker`, `Confirm`, `TextInput`, `AsyncTask`, `LiveView`, `Done`); callers assemble them into a root `tea.Model`. See `cmd/onboard/model.go`, `cmd/loadgen/model.go`, and `cmd/scaffold/model.go` for examples.
 - **`ci/Dockerfile`** — Multi-stage build: bun frontend, Go binary cross-compiled with `-trimpath`, `distroless/static` non-root runtime. Base images pinned by digest.

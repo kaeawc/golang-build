@@ -30,6 +30,11 @@ build: ## Build every cmd/* binary into bin/
 $(addprefix build-,$(CMDS)): build-%: ## Build one binary, e.g. make build-server
 	$(BUILD) -o $(BIN_DIR)/$* ./cmd/$*
 
+DURATION ?= 30
+.PHONY: pgo
+pgo: ## Regenerate cmd/server/default.pgo from a DURATION-second (default 30) load run
+	GO="$(GO)" DURATION=$(DURATION) bash scripts/pgo.sh
+
 .PHONY: run
 run: ## Run the HTTP server
 	$(GO) run ./cmd/server
@@ -40,9 +45,14 @@ docker: ## Build the server container image
 
 ##@ Test
 
+# -pgo=off: with cmd/server/default.pgo present, a multi-package -cover run
+# fails to link cmd/server.test ("fingerprint mismatch" on internal/db, a
+# package with no tests). PGO buys nothing in a coverage build anyway.
+COVER_FLAGS := -race -count=1 -covermode=atomic -coverprofile=coverage.out -pgo=off
+
 .PHONY: test
 test: ## Run tests with the race detector and coverage
-	$(GO) test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+	$(GO) test $(COVER_FLAGS) ./...
 
 .PHONY: test-short
 test-short: ## Run tests without the race detector (fast inner loop)
@@ -51,7 +61,7 @@ test-short: ## Run tests without the race detector (fast inner loop)
 .PHONY: test-junit
 test-junit: ## Run tests as CI does, writing junit-report.xml
 	$(TOOL) gotestsum --junitfile junit-report.xml --format standard-verbose -- \
-		-race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+		$(COVER_FLAGS) ./...
 
 .PHONY: cover
 cover: test ## Open the HTML coverage report

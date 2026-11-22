@@ -16,6 +16,7 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -62,6 +63,13 @@ type Config struct {
 
 // New returns a Logger backed by slog with the given config.
 func New(cfg Config) Logger {
+	return &slogLogger{l: NewSlog(cfg)}
+}
+
+// NewSlog returns a *slog.Logger with the given config. Use it at the
+// application root (and with slog.SetDefault) when code takes a
+// *slog.Logger directly.
+func NewSlog(cfg Config) *slog.Logger {
 	w := cfg.Writer
 	if w == nil {
 		w = os.Stderr
@@ -74,7 +82,35 @@ func New(cfg Config) Logger {
 	default:
 		h = slog.NewJSONHandler(w, opts)
 	}
-	return &slogLogger{l: slog.New(h)}
+	return slog.New(h)
+}
+
+// ParseFormat parses "json" or "text" (case-insensitive).
+func ParseFormat(s string) (Format, error) {
+	switch strings.ToLower(s) {
+	case "json":
+		return FormatJSON, nil
+	case "text":
+		return FormatText, nil
+	}
+	return 0, fmt.Errorf("log format %q: must be json or text", s)
+}
+
+type ctxKey struct{}
+
+// WithContext returns a copy of ctx carrying l. Middleware uses it to
+// hand a request-scoped logger (request ID, method, path) to handlers.
+func WithContext(ctx context.Context, l *slog.Logger) context.Context {
+	return context.WithValue(ctx, ctxKey{}, l)
+}
+
+// FromContext returns the logger stored by WithContext, or slog.Default()
+// when there is none, so callers can always log through it.
+func FromContext(ctx context.Context) *slog.Logger {
+	if l, ok := ctx.Value(ctxKey{}).(*slog.Logger); ok {
+		return l
+	}
+	return slog.Default()
 }
 
 // FromSlog wraps an existing *slog.Logger. Useful when the application root
