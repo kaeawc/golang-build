@@ -17,6 +17,7 @@ import (
 	"github.com/kaeawc/golang-build/internal/httpmw"
 	"github.com/kaeawc/golang-build/internal/httpserver"
 	"github.com/kaeawc/golang-build/internal/jobs"
+	"github.com/kaeawc/golang-build/internal/jsonresp"
 	"github.com/kaeawc/golang-build/internal/middleware"
 	"github.com/kaeawc/golang-build/internal/shutdown"
 )
@@ -117,25 +118,35 @@ func bootResources(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, cach
 // buildRouter wires the routing table with net/http patterns. A GET
 // pattern also serves HEAD. The SPA is registered as "GET /", so it
 // catches every unmatched GET while a wrong method on any route gets
-// 405 with an Allow header. The /api middleware wraps each API route
-// rather than a sub-mux, so unmatched requests never reach it (the
-// traffic recorder only sees real routes).
-func buildRouter(pool *pgxpool.Pool, users handlers.UserQuerier, c cache.Cache) *http.ServeMux {
+// 405 with an Allow header; unknown /api paths get a JSON 404 instead
+// of the SPA. Register API routes with handleAPI so they get the /api
+// middleware; unmatched requests never reach it (the traffic recorder
+// only sees real routes).
+func buildRouter(pool handlers.Pinger, users handlers.UserQuerier, c cache.Cache) *http.ServeMux {
 	traffic := middleware.NewTrafficRecorder()
 	api := httpmw.Compose(
 		middleware.Logging,
 		middleware.Recover,
 		traffic.Middleware,
-		middleware.ContentType,
 		middleware.Gzip,
+		middleware.ContentType, // inside Gzip so it sniffs the plain body
 	)
 
 	mux := http.NewServeMux()
+	handleAPI := func(pattern string, h http.Handler) { mux.Handle(pattern, api(h)) }
+
 	mux.Handle("GET /healthz", handlers.Health(pool))
-	mux.Handle("GET /api/users", api(handlers.GetUsers(users, c)))
-	mux.Handle("GET /api/admin/traffic", api(handlers.AdminTraffic(traffic)))
-	mux.Handle("GET /api/admin/healthchecks", api(handlers.AdminHealthchecks(pool, c)))
+	handleAPI("GET /api/users", handlers.GetUsers(users, c))
+	handleAPI("GET /api/admin/traffic", handlers.AdminTraffic(traffic))
+	handleAPI("GET /api/admin/healthchecks", handlers.AdminHealthchecks(pool, c))
+	mux.HandleFunc("GET /api/", apiNotFound)
 	mux.Handle("GET /ws", handlers.WebSocket())
 	mux.Handle("GET /", handlers.NewSPAHandler("web/dist", "index.html"))
 	return mux
+}
+
+// apiNotFound answers unknown /api paths with JSON instead of the SPA's
+// index.html, so API clients see a real 404.
+func apiNotFound(w http.ResponseWriter, r *http.Request) {
+	_ = jsonresp.WriteError(w, r, http.StatusNotFound, "not_found", "no such API endpoint")
 }

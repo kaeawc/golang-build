@@ -38,7 +38,7 @@ Use focused package tests while iterating: `go test ./internal/handlers/ -run Te
 
 - `cmd/server/` — HTTP server entry point.
 - `internal/handlers/` — route handlers (return `http.HandlerFunc` closures).
-- `internal/middleware/` — HTTP middleware (each is `func(http.Handler) http.Handler`, applied via `router.Use()`).
+- `internal/middleware/` — HTTP middleware (each is `func(http.Handler) http.Handler`, composed with `httpmw.Compose` and applied per route via `handleAPI` in `cmd/server/main.go`).
 - `internal/fsutil/` — atomic filesystem helpers (`WriteFileAtomic`).
 - `internal/clock/` — `Clock` interface, `System` impl, `Fake` for deterministic time tests.
 - `internal/proc/` — `Runner` interface over `os/exec` plus `Fake` with scripted matchers.

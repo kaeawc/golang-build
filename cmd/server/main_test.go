@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,11 +38,21 @@ func (c *testCache) Set(_ context.Context, _ string, _ string, _ time.Duration) 
 
 func (c *testCache) Close() {}
 
-// newTestRouter builds the real routing table. The pool is nil, so tests
-// must not invoke handlers that touch it (/healthz, /api/admin/healthchecks);
-// the table test resolves those with ServeMux.Handler instead.
+type testPinger struct{}
+
+func (testPinger) Ping(context.Context) error { return nil }
+
+// newTestRouter builds the real routing table with fake dependencies.
 func newTestRouter() *http.ServeMux {
-	return buildRouter(nil, &testQuerier{}, &testCache{})
+	return buildRouter(testPinger{}, &testQuerier{}, &testCache{})
+}
+
+func TestHealthz(t *testing.T) {
+	rr := httptest.NewRecorder()
+	newTestRouter().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if rr.Code != http.StatusOK || rr.Body.String() != `{"status":"ok"}` {
+		t.Errorf("GET /healthz = %d %q", rr.Code, rr.Body.String())
+	}
 }
 
 func TestMainAppStartup(t *testing.T) {
@@ -92,14 +103,17 @@ func TestRoutingTable(t *testing.T) {
 		{method: "GET", path: "/api/admin/healthchecks", pattern: "GET /api/admin/healthchecks"},
 		{method: "GET", path: "/ws", pattern: "GET /ws"},
 
-		// SPA fallback: every other GET, including unknown /api paths
-		// and trailing-slash variants, as with the gorilla catch-all.
+		// SPA fallback: every other GET outside /api, as with the
+		// gorilla catch-all.
 		{method: "GET", path: "/", pattern: "GET /"},
 		{method: "GET", path: "/assets/app.js", pattern: "GET /"},
 		{method: "GET", path: "/some/client/route", pattern: "GET /"},
 		{method: "GET", path: "/healthz/", pattern: "GET /"},
-		{method: "GET", path: "/api/nope", pattern: "GET /"},
-		{method: "GET", path: "/api/users/", pattern: "GET /"},
+
+		// Unknown /api paths: JSON 404 rather than the SPA's index.html.
+		{method: "GET", path: "/api/nope", pattern: "GET /api/", status: http.StatusNotFound},
+		{method: "GET", path: "/api/users/", pattern: "GET /api/", status: http.StatusNotFound},
+		{method: "GET", path: "/api/admin/nope", pattern: "GET /api/", status: http.StatusNotFound},
 
 		// Wrong method: 405 with Allow instead of serving the SPA.
 		{method: "POST", path: "/healthz", status: http.StatusMethodNotAllowed, allow: "GET, HEAD"},
@@ -109,11 +123,13 @@ func TestRoutingTable(t *testing.T) {
 		{method: "POST", path: "/ws", status: http.StatusMethodNotAllowed, allow: "GET, HEAD"},
 		{method: "POST", path: "/", status: http.StatusMethodNotAllowed, allow: "GET, HEAD"},
 		{method: "POST", path: "/some/client/route", status: http.StatusMethodNotAllowed, allow: "GET, HEAD"},
+		{method: "POST", path: "/api/nope", status: http.StatusMethodNotAllowed, allow: "GET, HEAD"},
 
 		// Unclean paths redirect (307; gorilla used 301). ServeMux.Handler
 		// reports the pattern the redirect target matches.
 		{method: "GET", path: "//api/users", pattern: "GET /api/users", status: http.StatusTemporaryRedirect, location: "/api/users"},
 		{method: "GET", path: "/api/../healthz", pattern: "GET /healthz", status: http.StatusTemporaryRedirect, location: "/healthz"},
+		{method: "GET", path: "/api", pattern: "GET /api/", status: http.StatusTemporaryRedirect, location: "/api/"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
@@ -160,8 +176,12 @@ func TestAPIMiddlewareWrapsOnlyAPIRoutes(t *testing.T) {
 	if got := rr.Header().Get("Vary"); got != "Accept-Encoding" {
 		t.Errorf("/api/users Vary = %q; gzip middleware not applied", got)
 	}
-	serve("GET", "/api/does-not-exist")
+	if rr := serve("GET", "/api/does-not-exist"); !strings.HasPrefix(rr.Header().Get("Content-Type"), "application/json") {
+		t.Errorf("unknown /api path Content-Type = %q, want application/json", rr.Header().Get("Content-Type"))
+	}
 	serve("POST", "/api/users")
+	// Every API route must be registered through handleAPI.
+	serve("GET", "/api/admin/healthchecks")
 
 	rr = serve("GET", "/api/admin/traffic")
 	if got := rr.Header().Get("Content-Type"); got != "application/json" {
@@ -175,8 +195,10 @@ func TestAPIMiddlewareWrapsOnlyAPIRoutes(t *testing.T) {
 	for _, s := range stats {
 		paths = append(paths, s.Method+" "+s.Path)
 	}
-	if !slices.Contains(paths, "GET /api/users") {
-		t.Errorf("traffic %v missing GET /api/users", paths)
+	for _, p := range []string{"GET /api/users", "GET /api/admin/healthchecks"} {
+		if !slices.Contains(paths, p) {
+			t.Errorf("traffic %v missing %s: route skips the /api middleware", paths, p)
+		}
 	}
 	for _, p := range []string{"GET /api/does-not-exist", "POST /api/users"} {
 		if slices.Contains(paths, p) {
