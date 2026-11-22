@@ -3,12 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/kaeawc/golang-build/internal/cache"
 	"github.com/kaeawc/golang-build/internal/db"
+	"github.com/kaeawc/golang-build/internal/logger"
 )
 
 type User struct {
@@ -28,7 +28,7 @@ func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 		cached, err := c.Get(r.Context(), cacheKey)
 		if err == nil {
 			if _, err := w.Write([]byte(cached)); err != nil { // #nosec G705 -- value is our own marshaled JSON, not user input
-				log.Printf("write error: %v", err)
+				logger.FromContext(r.Context()).Warn("write response", "err", err)
 			}
 			return
 		}
@@ -51,11 +51,11 @@ func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 		}
 
 		if err := c.Set(r.Context(), cacheKey, string(data), 30*time.Second); err != nil {
-			log.Printf("cache set error: %v", err)
+			logger.FromContext(r.Context()).Warn("cache set", "key", cacheKey, "err", err)
 		}
 
 		if _, err := w.Write(data); err != nil {
-			log.Printf("write error: %v", err)
+			logger.FromContext(r.Context()).Warn("write response", "err", err)
 		}
 	}
 }

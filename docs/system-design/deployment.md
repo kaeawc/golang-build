@@ -27,3 +27,12 @@ Set via `flyctl secrets set -a <app>`:
 - `DATABASE_URL` (pooled)
 - `DATABASE_URL_DIRECT` (direct, for migrations)
 - `VALKEY_ADDR`
+
+## Logging
+
+The server logs with `log/slog` to stderr. Optional settings (plain env, not secrets):
+
+- `LOG_LEVEL`: `debug`, `info` (default), `warn` or `error`.
+- `LOG_FORMAT`: `json` or `text`. Defaults to `text` when `ENVIRONMENT=development` and `json` everywhere else.
+
+Each `/api` request gets a request-scoped logger carrying `request_id` (from `X-Request-ID`, or generated and echoed back), `method` and `path`. Handlers retrieve it with `logger.FromContext(r.Context())`.

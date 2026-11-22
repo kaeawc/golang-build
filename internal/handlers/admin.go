@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/kaeawc/golang-build/internal/cache"
+	"github.com/kaeawc/golang-build/internal/logger"
 	"github.com/kaeawc/golang-build/internal/middleware"
 )
 
@@ -21,8 +21,8 @@ type Probe struct {
 }
 
 func AdminTraffic(rec *middleware.TrafficRecorder) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, rec.Snapshot())
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, r, rec.Snapshot())
 	}
 }
 
@@ -35,7 +35,7 @@ func AdminHealthchecks(pool Pinger, c cache.Cache) http.HandlerFunc {
 		if c != nil {
 			probes = append(probes, probeCache(ctx, c))
 		}
-		writeJSON(w, probes)
+		writeJSON(w, r, probes)
 	}
 }
 
@@ -68,7 +68,7 @@ func isMissingKey(err error) bool {
 	return strings.Contains(err.Error(), "valkey nil")
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		http.Error(w, "encode error", http.StatusInternalServerError)
@@ -76,6 +76,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(data); err != nil {
-		log.Printf("write error: %v", err)
+		logger.FromContext(r.Context()).Warn("write response", "err", err)
 	}
 }
