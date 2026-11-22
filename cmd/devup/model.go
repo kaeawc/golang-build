@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kaeawc/golang-build/internal/proc"
 	"github.com/kaeawc/golang-build/internal/tui"
@@ -40,7 +40,7 @@ func newModel(runner proc.Runner) model {
 func (m model) Init() tea.Cmd { return tui.PhaseInit(m.phase) }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if cmd := tui.HandleGlobal(msg); cmd != nil {
+	if cmd := tui.HandleGlobal(msg, m.phase); cmd != nil {
 		return m, cmd
 	}
 	switch msg := msg.(type) {
@@ -54,11 +54,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() string {
-	if m.err != nil {
-		return tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n"
-	}
-	return m.phase.View()
+func (m model) View() tea.View {
+	return tui.RootView(m.err, m.phase)
 }
 
 // ---------- transitions ----------------------------------------------------

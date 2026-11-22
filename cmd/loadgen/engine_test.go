@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -208,6 +209,9 @@ func TestHeadlessRunsAgainstTestServer(t *testing.T) {
 	}
 	if buf.Len() == 0 {
 		t.Errorf("expected output written")
+	}
+	if strings.Contains(buf.String(), "\x1b[") {
+		t.Errorf("headless output to a non-terminal must not contain ANSI escapes: %q", buf.String())
 	}
 }
 
