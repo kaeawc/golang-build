@@ -67,19 +67,23 @@ test-junit: ## Run tests as CI does, writing junit-report.xml
 cover: test ## Open the HTML coverage report
 	$(GO) tool cover -html=coverage.out
 
+# Narrow and repeat for benchstat: make bench BENCH=Chain PKG=./internal/httpmw COUNT=10 > new.txt
+BENCH     ?= .
+BENCHTIME ?= 1s
+COUNT     ?= 1
+PKG       ?= ./...
 .PHONY: bench
-bench: ## Run benchmarks
-	$(GO) test -run='^$$' -bench=. -benchmem ./...
+bench: ## Run benchmarks (BENCH regexp, PKG, COUNT, BENCHTIME)
+	$(GO) test -run='^$$' -bench='$(BENCH)' -benchmem -benchtime=$(BENCHTIME) -count=$(COUNT) $(PKG)
+
+.PHONY: bench-compare
+bench-compare: ## Compare two bench outputs: make bench-compare OLD=old.txt NEW=new.txt
+	$(TOOL) benchstat $(OLD) $(NEW)
 
 FUZZTIME ?= 30s
 .PHONY: fuzz
 fuzz: ## Run every fuzz target for FUZZTIME (default 30s) each
-	@for pkg in $$($(GO) list ./...); do \
-		for f in $$($(GO) test -list='^Fuzz' $$pkg | grep '^Fuzz'); do \
-			echo "== $$pkg $$f"; \
-			$(GO) test -run='^$$' -fuzz="^$$f$$" -fuzztime=$(FUZZTIME) $$pkg || exit 1; \
-		done; \
-	done
+	GO='$(GO)' FUZZTIME=$(FUZZTIME) bash scripts/fuzz.sh
 
 ##@ Quality
 
