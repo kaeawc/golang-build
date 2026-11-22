@@ -8,7 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kaeawc/golang-build/internal/eventbus"
 	"github.com/kaeawc/golang-build/internal/tui"
@@ -203,7 +203,7 @@ func TestModelGlobalQuitShutsDownProducer(t *testing.T) {
 	}
 
 	// Send 'q'. Must shut down the producer + bus.
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if cmd == nil {
 		t.Fatalf("expected quit cmd")
 	}
@@ -230,6 +230,9 @@ func TestRunHeadlessHappyPath(t *testing.T) {
 		}
 		if !strings.Contains(out, "stopped") {
 			t.Errorf("missing 'stopped' in output: %s", out)
+		}
+		if strings.Contains(out, "\x1b[") {
+			t.Errorf("headless output to a non-terminal must not contain ANSI escapes: %q", out)
 		}
 	})
 }

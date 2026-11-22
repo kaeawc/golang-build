@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Done is a terminal phase that renders a final summary and quits the
@@ -21,7 +21,7 @@ func NewDone(title, body string) Done {
 }
 
 func (d Done) Update(msg tea.Msg) (Phase, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok {
+	if km, ok := msg.(tea.KeyPressMsg); ok {
 		switch km.String() {
 		case "enter", "esc":
 			return d, tea.Quit

@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"charm.land/lipgloss/v2"
 )
 
 // runHeadless executes a load run with no TUI, useful for CI / scripts.
@@ -26,6 +28,8 @@ func runHeadless(out io.Writer, url string, concurrency int, dur time.Duration) 
 	eng := NewEngine(cfg)
 	eng.Start(context.Background())
 	snap := eng.Snapshot()
-	fmt.Fprintln(out, renderFinal(snap))
+	// lipgloss v2 always emits ANSI; Fprintln downsamples for the writer
+	// (plain text when out is not a terminal, honors NO_COLOR).
+	_, _ = lipgloss.Fprintln(out, renderFinal(snap))
 	return snap, nil
 }
