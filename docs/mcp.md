@@ -93,7 +93,7 @@ client over `mcp.NewInMemoryTransports`.
 | Protected Resource Metadata | RFC 9728 | `auth.ProtectedResourceMetadataHandler` at `/.well-known/oauth-protected-resource[/mcp]`, `WWW-Authenticate resource_metadata=` | `TestHTTPAuth` |
 | Capabilities | Lifecycle › Capabilities | explicit `ServerOptions.Capabilities` (tools/prompts/resources listChanged + subscribe, completions; **no logging**) | `TestDiscoveryAndLifecycle` |
 | Ping | Utilities › Ping (removed in 2026-07-28) | SDK | `TestLegacyPing`; 2026 rejection in `TestHTTPRawProtocol` |
-| Live Postgres store | n/a | `store_pgx.go` | `TestPgxStoreContract` (skipped unless `MCP_TEST_DATABASE_URL`) |
+| Live Postgres store | n/a | `store_pgx.go` | `TestPgxStoreContract` (skipped unless `MCP_TEST_DATABASE_URL`; `make test-integration` runs it, and `TestPgxStoreContractOnMigratedSchema`, against a container) |
 
 Not implemented on purpose:
 

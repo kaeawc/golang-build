@@ -4,6 +4,9 @@ version: "2"
 
 run:
   tests: true
+  # Lint the `//go:build integration` tests too (make test-integration).
+  build-tags:
+    - integration
 
 linters:
   default: none

@@ -122,7 +122,7 @@ func (l *LiveMigrator) UpOne(_ context.Context) error {
 		return err
 	}
 	defer m.Close()
-	if err := m.Steps(1); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err := stepErr(m.Steps(1)); err != nil {
 		return fmt.Errorf("migrate: up one: %w", err)
 	}
 	return nil
@@ -134,10 +134,22 @@ func (l *LiveMigrator) DownOne(_ context.Context) error {
 		return err
 	}
 	defer m.Close()
-	if err := m.Steps(-1); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	if err := stepErr(m.Steps(-1)); err != nil {
 		return fmt.Errorf("migrate: down one: %w", err)
 	}
 	return nil
+}
+
+// stepErr drops Steps' "nothing to do" results. Unlike Up, which returns
+// ErrNoChange at head, Steps reports stepping past either end of the
+// range (up at head, down with nothing applied) as the bare
+// os.ErrNotExist. Wrapped forms of it mean a migration file is missing,
+// which is a real error, hence the identity check.
+func stepErr(err error) error {
+	if errors.Is(err, migrate.ErrNoChange) || err == os.ErrNotExist { //nolint:errorlint // see above: only the bare sentinel means no change
+		return nil
+	}
+	return err
 }
 
 // ---------- migration file scanning ----------------------------------------

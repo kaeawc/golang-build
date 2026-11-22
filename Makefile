@@ -44,6 +44,15 @@ docker: ## Build the server container image
 test: ## Run tests with the race detector and coverage
 	$(GO) test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
 
+# Packages with `//go:build integration` test files. Recursive (=) so the
+# grep only runs for targets that use it.
+INTEGRATION_PKGS = $(sort $(dir $(shell grep -rl --include='*_test.go' '^//go:build integration' cmd internal)))
+
+.PHONY: test-integration
+test-integration: ## Run integration tests against Postgres/Valkey containers (needs Docker)
+	$(GO) test -tags integration -race -count=1 -timeout 15m -covermode=atomic \
+		-coverprofile=coverage-integration.out $(addprefix ./,$(INTEGRATION_PKGS))
+
 .PHONY: test-short
 test-short: ## Run tests without the race detector (fast inner loop)
 	$(GO) test -short ./...
@@ -86,8 +95,8 @@ lint-fix: ## Run golangci-lint and apply automatic fixes
 	$(TOOL) golangci-lint run --fix ./...
 
 .PHONY: vet
-vet: ## Run go vet
-	$(GO) vet ./...
+vet: ## Run go vet (integration-tagged files included)
+	$(GO) vet -tags integration ./...
 
 .PHONY: complexity
 complexity: ## Flag functions with cyclomatic complexity over 10
@@ -154,7 +163,7 @@ ci: tidy-check vet lint complexity security vuln licenses actionlint test ## Eve
 
 .PHONY: clean
 clean: ## Remove build and test artifacts
-	rm -rf $(BIN_DIR) dist coverage.out junit-report.xml gosec-report.xml
+	rm -rf $(BIN_DIR) dist coverage.out coverage-integration.out junit-report.xml gosec-report.xml
 
 .PHONY: help
 help: ## Show this help
