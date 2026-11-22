@@ -42,8 +42,9 @@ The server can't boot without Postgres and Valkey. So by default, `make pgo`
 profiles a harness instead: `cmd/server`'s test binary with `PGO_HARNESS_ADDR`
 set (see `TestMain` in `cmd/server/pgo_harness_test.go`). It serves the real
 `buildRouter`: the same routes, the full `/api` middleware chain (request ID,
-logging, recover, traffic recorder, gzip, content type) and the real handlers.
-It also runs the real debug listener. The differences:
+logging, recover, traffic recorder, gzip, content type) and the real handlers,
+wrapped in otelhttp as in production, with the trace-aware log handler. It also
+runs the real debug listener. The differences:
 
 - **Fakes in place of I/O.** The user store is a fixed 50-row table, and the
   cache is an in-process map that honors TTLs, so `/api/users` gets the
@@ -58,6 +59,9 @@ It also runs the real debug listener. The differences:
   `internal/...`, `net/http`, `compress/flate` and `log/slog`, and its symbols
   match.
 - **Synthetic traffic.** The mix above is a guess, not production's.
+- **Telemetry off.** `OTEL_EXPORTER_OTLP_ENDPOINT` isn't set, so otelhttp runs
+  against the no-op providers. With an endpoint set, span recording, metric
+  aggregation and OTLP export add work the profile doesn't see.
 - **Devirtualization targets.** For hot interface calls, such as
   `cache.Cache.Get` in the users handler, the profile names the fake types
   (`memCache`, `harnessUsers`). They don't exist in the production binary, so

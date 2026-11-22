@@ -22,7 +22,7 @@ func Recover(next http.Handler) http.Handler {
 			if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 				panic(rec)
 			}
-			logger.FromContext(r.Context()).Error("panic recovered",
+			logger.FromContext(r.Context()).ErrorContext(r.Context(), "panic recovered",
 				"panic", rec,
 				"stack", string(debug.Stack()),
 			)

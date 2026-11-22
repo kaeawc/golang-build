@@ -39,8 +39,21 @@ services:
     environment:
       DATABASE_URL: "postgres://appuser:apppass@postgres:5432/appdb?sslmode=disable"
       VALKEY_ADDR: "valkey:6379"
+      # Traces/metrics to the otel-lgtm service; remove to disable.
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-lgtm:4318"
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      otel-lgtm:
+        condition: service_started
+
+  # Grafana + Tempo + Prometheus + Loki with an OTLP endpoint, for viewing
+  # the server's traces and metrics locally: http://localhost:3000.
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.41.1
+    ports:
+      - "3000:3000" # Grafana
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP

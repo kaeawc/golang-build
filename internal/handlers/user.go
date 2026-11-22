@@ -28,7 +28,7 @@ func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 		cached, err := c.Get(r.Context(), cacheKey)
 		if err == nil {
 			if _, err := w.Write([]byte(cached)); err != nil { // #nosec G705 -- value is our own marshaled JSON, not user input
-				logger.FromContext(r.Context()).Warn("write response", "err", err)
+				logger.FromContext(r.Context()).WarnContext(r.Context(), "write response", "err", err)
 			}
 			return
 		}
@@ -51,11 +51,11 @@ func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 		}
 
 		if err := c.Set(r.Context(), cacheKey, string(data), 30*time.Second); err != nil {
-			logger.FromContext(r.Context()).Warn("cache set", "key", cacheKey, "err", err)
+			logger.FromContext(r.Context()).WarnContext(r.Context(), "cache set", "key", cacheKey, "err", err)
 		}
 
 		if _, err := w.Write(data); err != nil {
-			logger.FromContext(r.Context()).Warn("write response", "err", err)
+			logger.FromContext(r.Context()).WarnContext(r.Context(), "write response", "err", err)
 		}
 	}
 }

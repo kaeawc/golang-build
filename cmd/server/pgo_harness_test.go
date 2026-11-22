@@ -21,11 +21,13 @@ import (
 	"github.com/kaeawc/golang-build/internal/httpserver"
 	"github.com/kaeawc/golang-build/internal/logger"
 	"github.com/kaeawc/golang-build/internal/shutdown"
+	"github.com/kaeawc/golang-build/internal/telemetry"
 )
 
 // TestMain doubles as the PGO profiling harness for scripts/pgo.sh
 // (make pgo). With PGO_HARNESS_ADDR set, the test binary serves the
-// production router (buildRouter and its full middleware chain) backed by
+// production handler (buildRouter and its full middleware chain, wrapped in
+// otelhttp by instrument with the default no-op providers) backed by
 // in-memory fakes, plus the real debug server on PGO_HARNESS_DEBUG_ADDR,
 // until SIGINT/SIGTERM. That profiles the request path without Postgres
 // or Valkey; docs/pgo.md covers what the fakes leave out. Without the
@@ -48,7 +50,8 @@ func TestMain(m *testing.M) {
 // logs are formatted as in production (JSON at info) but discarded, so
 // their cost stays in the profile.
 func serveHarness(ctx context.Context, addr, debugAddr string) (err error) {
-	log := logger.NewSlog(logger.Config{Writer: io.Discard, Format: logger.FormatJSON, Level: slog.LevelInfo})
+	base := logger.NewSlog(logger.Config{Writer: io.Discard, Format: logger.FormatJSON, Level: slog.LevelInfo})
+	log := slog.New(telemetry.LogHandler(base.Handler()))
 	coord := shutdown.New(5 * time.Second)
 	defer func() { err = errors.Join(err, coord.Shutdown(context.WithoutCancel(ctx))) }()
 
@@ -57,7 +60,7 @@ func serveHarness(ctx context.Context, addr, debugAddr string) (err error) {
 	}
 	srv := httpserver.New(httpserver.Config{
 		Addr:         addr,
-		Handler:      buildRouter(log, testPinger{}, harnessUsers(50), newMemCache()),
+		Handler:      instrument(buildRouter(log, testPinger{}, harnessUsers(50), newMemCache())),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
