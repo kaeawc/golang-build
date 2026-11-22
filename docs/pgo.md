@@ -58,6 +58,11 @@ It also runs the real debug listener. The differences:
   `internal/...`, `net/http`, `compress/flate` and `log/slog`, and its symbols
   match.
 - **Synthetic traffic.** The mix above is a guess, not production's.
+- **Devirtualization targets.** For hot interface calls, such as
+  `cache.Cache.Get` in the users handler, the profile names the fake types
+  (`memCache`, `harnessUsers`). They don't exist in the production binary, so
+  the compiler adds no devirtualized fast path at those call sites. There is
+  no harm, but also no gain until a production profile is merged in.
 
 For a more faithful profile, run the real server and point the script at it:
 
@@ -67,8 +72,9 @@ PGO_SERVER_URL=http://127.0.0.1:8080 PGO_DEBUG_URL=http://127.0.0.1:6060 make pg
 ```
 
 The best profile comes from production itself. Capture one from a machine's
-debug listener (for example over `fly proxy 6060` or an SSH tunnel; the
-listener is loopback-only by default). Then merge it in:
+debug listener. It's loopback-only by default, so on Fly see
+[Profiling in deployment.md](system-design/deployment.md#profiling). Then merge
+it in:
 
 ```bash
 curl -o prod.pprof 'http://127.0.0.1:6060/debug/pprof/profile?seconds=60'

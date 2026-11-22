@@ -57,8 +57,11 @@ type Config struct {
 	LogFormat logger.Format
 	// DebugAddr comes from DEBUG_ADDR: the listen address of the pprof
 	// debug server (e.g. 127.0.0.1:6060). Empty disables it. The host
-	// must be loopback unless DEBUG_ALLOW_NON_LOOPBACK is true.
+	// must be loopback unless DebugAllowNonLoopback is set.
 	DebugAddr string
+	// DebugAllowNonLoopback comes from DEBUG_ALLOW_NON_LOOPBACK (default
+	// false).
+	DebugAllowNonLoopback bool
 }
 
 func Load(r env.Reader) (*Config, error) {
@@ -85,7 +88,7 @@ func Load(r env.Reader) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	debugAddr, err := loadDebugAddr(r)
+	debugAddr, debugAllowNonLoopback, err := loadDebug(r)
 	if err != nil {
 		return nil, err
 	}
@@ -101,33 +104,36 @@ func Load(r env.Reader) (*Config, error) {
 			MachineID: env.GetTrim(r, "FLY_MACHINE_ID"),
 			PublicIP:  env.GetTrim(r, "FLY_PUBLIC_IP"),
 		},
-		LogLevel:  level,
-		LogFormat: format,
-		DebugAddr: debugAddr,
+		LogLevel:              level,
+		LogFormat:             format,
+		DebugAddr:             debugAddr,
+		DebugAllowNonLoopback: debugAllowNonLoopback,
 	}, nil
 }
 
-// loadDebugAddr reads DEBUG_ADDR. pprof exposes heap contents, command
-// lines and CPU-burning endpoints, so a host that is not loopback
-// (including an empty host, which binds every interface) is refused
-// unless DEBUG_ALLOW_NON_LOOPBACK opts in.
-func loadDebugAddr(r env.Reader) (string, error) {
-	addr := env.GetTrim(r, "DEBUG_ADDR")
+// loadDebug reads DEBUG_ADDR and DEBUG_ALLOW_NON_LOOPBACK. pprof exposes
+// heap contents, command lines and CPU-burning endpoints, so a host that
+// is not loopback (including an empty host, which binds every interface)
+// is refused unless DEBUG_ALLOW_NON_LOOPBACK opts in. The debug server
+// checks the bound address again, which also catches a "localhost" that
+// resolves elsewhere.
+func loadDebug(r env.Reader) (addr string, allowNonLoopback bool, err error) {
+	addr = env.GetTrim(r, "DEBUG_ADDR")
 	if addr == "" {
-		return "", nil
+		return "", false, nil
 	}
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", fmt.Errorf("DEBUG_ADDR %q: %w", addr, err)
+		return "", false, fmt.Errorf("DEBUG_ADDR %q: %w", addr, err)
 	}
-	allow, err := env.GetBool(r, "DEBUG_ALLOW_NON_LOOPBACK", false)
+	allowNonLoopback, err = env.GetBool(r, "DEBUG_ALLOW_NON_LOOPBACK", false)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	if !allow && !isLoopbackHost(host) {
-		return "", fmt.Errorf("DEBUG_ADDR %q: host must be loopback (127.0.0.1, ::1 or localhost); set DEBUG_ALLOW_NON_LOOPBACK=true to expose pprof beyond this machine", addr)
+	if !allowNonLoopback && !isLoopbackHost(host) {
+		return "", false, fmt.Errorf("DEBUG_ADDR %q: host must be loopback (127.0.0.1, ::1 or localhost); set DEBUG_ALLOW_NON_LOOPBACK=true to expose pprof beyond this machine", addr)
 	}
-	return addr, nil
+	return addr, allowNonLoopback, nil
 }
 
 func isLoopbackHost(host string) bool {

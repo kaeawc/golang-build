@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaeawc/golang-build/internal/config"
 	"github.com/kaeawc/golang-build/internal/db"
 	"github.com/kaeawc/golang-build/internal/httpserver"
 	"github.com/kaeawc/golang-build/internal/logger"
@@ -51,7 +52,7 @@ func serveHarness(ctx context.Context, addr, debugAddr string) (err error) {
 	coord := shutdown.New(5 * time.Second)
 	defer func() { err = errors.Join(err, coord.Shutdown(context.WithoutCancel(ctx))) }()
 
-	if _, err := startDebugServer(ctx, debugAddr, log, coord); err != nil {
+	if _, err := startDebugServer(ctx, &config.Config{DebugAddr: debugAddr}, log, coord); err != nil {
 		return err
 	}
 	srv := httpserver.New(httpserver.Config{

@@ -11,12 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaeawc/golang-build/internal/config"
 	"github.com/kaeawc/golang-build/internal/shutdown"
 )
 
 func TestDebugServerDisabledWhenAddrEmpty(t *testing.T) {
 	coord := shutdown.New(time.Second)
-	addr, err := startDebugServer(t.Context(), "", slog.New(slog.DiscardHandler), coord)
+	addr, err := startDebugServer(t.Context(), &config.Config{}, slog.New(slog.DiscardHandler), coord)
 	if err != nil || addr != nil {
 		t.Fatalf("startDebugServer(\"\") = %v, %v; want nil, nil", addr, err)
 	}
@@ -27,7 +28,7 @@ func TestDebugServerDisabledWhenAddrEmpty(t *testing.T) {
 
 func TestDebugServerServesPprofUntilShutdown(t *testing.T) {
 	coord := shutdown.New(time.Second)
-	addr, err := startDebugServer(t.Context(), "127.0.0.1:0", slog.New(slog.DiscardHandler), coord)
+	addr, err := startDebugServer(t.Context(), &config.Config{DebugAddr: "127.0.0.1:0"}, slog.New(slog.DiscardHandler), coord)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,11 +64,35 @@ func TestDebugServerBindErrorFailsBoot(t *testing.T) {
 	defer busy.Close()
 
 	coord := shutdown.New(time.Second)
-	if _, err := startDebugServer(t.Context(), busy.Addr().String(), slog.New(slog.DiscardHandler), coord); err == nil {
+	if _, err := startDebugServer(t.Context(), &config.Config{DebugAddr: busy.Addr().String()}, slog.New(slog.DiscardHandler), coord); err == nil {
 		t.Fatal("startDebugServer on a busy port succeeded, want error")
 	}
 	if coord.Size() != 0 {
 		t.Errorf("registered %d shutdown hooks after a failed bind, want 0", coord.Size())
+	}
+}
+
+// TestDebugServerChecksBoundAddress covers callers that skip
+// config.Load: the bound address itself must be loopback unless allowed.
+func TestDebugServerChecksBoundAddress(t *testing.T) {
+	coord := shutdown.New(time.Second)
+	log := slog.New(slog.DiscardHandler)
+	if addr, err := startDebugServer(t.Context(), &config.Config{DebugAddr: "0.0.0.0:0"}, log, coord); err == nil {
+		t.Fatalf("startDebugServer(0.0.0.0:0) bound %v, want error", addr)
+	}
+	if coord.Size() != 0 {
+		t.Fatalf("registered %d shutdown hooks after refusing, want 0", coord.Size())
+	}
+
+	addr, err := startDebugServer(t.Context(), &config.Config{DebugAddr: "0.0.0.0:0", DebugAllowNonLoopback: true}, log, coord)
+	if err != nil {
+		t.Fatalf("startDebugServer(0.0.0.0:0) with opt-in: %v", err)
+	}
+	if err := coord.Shutdown(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if addr == nil {
+		t.Error("nil address with opt-in")
 	}
 }
 

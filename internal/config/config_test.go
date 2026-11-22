@@ -85,6 +85,9 @@ func TestLoadDebugAddr(t *testing.T) {
 			if cfg.DebugAddr != tt.want {
 				t.Errorf("DebugAddr = %q, want %q", cfg.DebugAddr, tt.want)
 			}
+			if want := tt.vars["DEBUG_ALLOW_NON_LOOPBACK"] != ""; cfg.DebugAllowNonLoopback != want {
+				t.Errorf("DebugAllowNonLoopback = %v, want %v", cfg.DebugAllowNonLoopback, want)
+			}
 		})
 	}
 }

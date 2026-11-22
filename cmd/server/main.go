@@ -75,7 +75,7 @@ func run(ctx context.Context, r env.Reader, logOut io.Writer) (err error) {
 		}
 	}()
 
-	if _, err := startDebugServer(ctx, cfg.DebugAddr, log, coord); err != nil {
+	if _, err := startDebugServer(ctx, cfg, log, coord); err != nil {
 		return err
 	}
 
