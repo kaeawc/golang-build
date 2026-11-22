@@ -144,6 +144,13 @@ release-check: ## Run the release readiness checklist
 release-snapshot: ## Build a local goreleaser snapshot into dist/ (needs goreleaser)
 	goreleaser release --snapshot --clean
 
+##@ Template
+
+.PHONY: rename
+rename: ## Make the template yours: make rename MODULE=github.com/you/app [NAME=app]
+	@test -n "$(MODULE)" || { echo "usage: make rename MODULE=github.com/you/app [NAME=app]" >&2; exit 2; }
+	$(GO) run ./scripts/rename-module -module '$(MODULE)' $(if $(NAME),-name '$(NAME)')
+
 ##@ Aggregates
 
 .PHONY: check

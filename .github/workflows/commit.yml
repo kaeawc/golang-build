@@ -258,6 +258,47 @@ jobs:
           version: '~> v2'
           args: check
 
+  template-rename:
+    # Proves `make rename` still turns the template into a working project:
+    # rename a scratch copy to a throwaway module path, then build and test
+    # it there. Delete this job once you have renamed your copy.
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: "Set up Go"
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+
+      - name: "Copy the repo to a scratch directory"
+        run: |
+          cp -a "$GITHUB_WORKSPACE/." "$RUNNER_TEMP/renamed"
+          echo "OLD_MODULE=$(go list -m)" >> "$GITHUB_ENV"
+
+      - name: "make rename (rewrites, go mod tidy, make check)"
+        working-directory: ${{ runner.temp }}/renamed
+        run: make rename MODULE=example.com/throwaway/renamed-app
+
+      - name: "No reference to the old module path is left"
+        working-directory: ${{ runner.temp }}/renamed
+        run: |
+          test "$(go list -m)" = example.com/throwaway/renamed-app
+          if git grep -nIF "$OLD_MODULE" -- ':!scripts/rename-module/'; then
+            echo "::error::rename left references to $OLD_MODULE"
+            exit 1
+          fi
+
+      - name: "Build every binary in the renamed copy"
+        working-directory: ${{ runner.temp }}/renamed
+        run: make build
+
   codeql-analysis:
     runs-on: ubuntu-latest
     permissions:
