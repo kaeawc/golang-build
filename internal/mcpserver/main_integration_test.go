@@ -7,8 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/kaeawc/golang-build/internal/testinfra"
 )
 
@@ -39,10 +37,5 @@ func TestPgxStoreContractOnMigratedSchema(t *testing.T) {
 	if stack == nil {
 		t.Skip("MCP_TEST_DATABASE_URL is set; not creating databases on an external server")
 	}
-	pool, err := pgxpool.New(t.Context(), stack.Postgres.NewMigratedDatabase(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	testUserStore(t, NewPgxStore(pool))
+	testUserStore(t, NewPgxStore(testinfra.NewPool(t, stack.Postgres.NewMigratedDatabase(t))))
 }

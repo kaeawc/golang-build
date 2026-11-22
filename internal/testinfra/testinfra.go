@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcvalkey "github.com/testcontainers/testcontainers-go/modules/valkey"
@@ -176,6 +177,34 @@ func (p *Postgres) admin(t testing.TB, sql string) {
 	if _, err := conn.Exec(ctx, sql); err != nil {
 		t.Fatalf("%s: %v", sql, err)
 	}
+}
+
+// NewPool opens a pgx pool on dsn and closes it when t ends.
+func NewPool(t testing.TB, dsn string) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("pgxpool.New: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// TableExists reports whether table resolves on dsn's search path.
+func TableExists(t testing.TB, dsn, table string) bool {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), statementTimeout)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var ok bool
+	if err := conn.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, table).Scan(&ok); err != nil {
+		t.Fatalf("to_regclass(%s): %v", table, err)
+	}
+	return ok
 }
 
 // withDatabase swaps the database name (the URL path) in a postgres:// DSN.

@@ -6,10 +6,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaeawc/golang-build/internal/db"
 	"github.com/kaeawc/golang-build/internal/testinfra"
@@ -25,14 +27,22 @@ func TestMain(m *testing.M) {
 	}))
 }
 
-func newPool(t *testing.T, dsn string) *pgxpool.Pool {
+// latestMigration is the highest version in sql/migrations.
+func latestMigration(t *testing.T) int64 {
 	t.Helper()
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatal(err)
+	files, err := filepath.Glob(filepath.Join(testinfra.MigrationsDir(), "*.up.sql"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no migrations found: %v", err)
 	}
-	t.Cleanup(pool.Close)
-	return pool
+	var latest int64
+	for _, f := range files {
+		v, err := strconv.ParseInt(strings.SplitN(filepath.Base(f), "_", 2)[0], 10, 64)
+		if err != nil {
+			t.Fatalf("migration %s: %v", f, err)
+		}
+		latest = max(latest, v)
+	}
+	return latest
 }
 
 func TestMigrateIsIdempotent(t *testing.T) {
@@ -50,12 +60,12 @@ func TestMigrateIsIdempotent(t *testing.T) {
 
 	var version int64
 	var dirty bool
-	if err := newPool(t, dsn).QueryRow(t.Context(),
+	if err := testinfra.NewPool(t, dsn).QueryRow(t.Context(),
 		`SELECT version, dirty FROM schema_migrations`).Scan(&version, &dirty); err != nil {
 		t.Fatal(err)
 	}
-	if version != 1 || dirty {
-		t.Errorf("schema_migrations = (%d, dirty=%v), want (1, false)", version, dirty)
+	if want := latestMigration(t); version != want || dirty {
+		t.Errorf("schema_migrations = (%d, dirty=%v), want (%d, false)", version, dirty, want)
 	}
 }
 
@@ -87,7 +97,7 @@ func TestMigrateErrors(t *testing.T) {
 func TestQueries(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	q := db.New(newPool(t, stack.Postgres.NewMigratedDatabase(t)))
+	q := db.New(testinfra.NewPool(t, stack.Postgres.NewMigratedDatabase(t)))
 
 	users, err := q.GetUsers(ctx)
 	if err != nil || len(users) != 0 {
@@ -147,7 +157,7 @@ func TestQueries(t *testing.T) {
 func TestQueriesInTransaction(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	pool := newPool(t, stack.Postgres.NewMigratedDatabase(t))
+	pool := testinfra.NewPool(t, stack.Postgres.NewMigratedDatabase(t))
 
 	// DBTX is satisfied by pgx.Tx as well as the pool.
 	tx, err := pool.Begin(ctx)
@@ -170,7 +180,7 @@ func TestQueryErrorsSurface(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	// No migrations: every query hits a missing table.
-	q := db.New(newPool(t, stack.Postgres.NewDatabase(t)))
+	q := db.New(testinfra.NewPool(t, stack.Postgres.NewDatabase(t)))
 	if _, err := q.GetUsers(ctx); err == nil {
 		t.Error("GetUsers without table: want error")
 	}

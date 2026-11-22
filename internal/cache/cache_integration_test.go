@@ -102,22 +102,23 @@ func TestSetKeepsMillisecondTTL(t *testing.T) {
 		t.Fatalf("Set(500ms): %v", err)
 	}
 
-	key := t.Name() + "/frac"
-	if err := c.Set(ctx, key, "v", 1500*time.Millisecond); err != nil {
-		t.Fatal(err)
-	}
+	// Dial the raw client first so only one round trip separates Set and
+	// PTTL. 2.9s leaves ~900ms of slack: EX would have stored 2000ms.
 	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{stack.Valkey.Addr}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	key := t.Name() + "/frac"
+	if err := c.Set(ctx, key, "v", 2900*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
 	pttl, err := client.Do(ctx, client.B().Pttl().Key(key).Build()).AsInt64()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// EX would have stored 1000ms.
-	if pttl <= 1000 || pttl > 1500 {
-		t.Errorf("PTTL after Set(1.5s) = %dms, want (1000, 1500]", pttl)
+	if pttl <= 2000 || pttl > 2900 {
+		t.Errorf("PTTL after Set(2.9s) = %dms, want (2000, 2900]", pttl)
 	}
 
 	if err := c.Set(ctx, t.Name()+"/zero", "v", 0); err == nil {

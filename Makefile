@@ -159,7 +159,7 @@ release-snapshot: ## Build a local goreleaser snapshot into dist/ (needs gorelea
 check: tidy-check vet lint test ## Fast pre-push gate
 
 .PHONY: ci
-ci: tidy-check vet lint complexity security vuln licenses actionlint test ## Everything CI runs (except CodeQL and the image build)
+ci: tidy-check vet lint complexity security vuln licenses actionlint test ## Everything CI runs except CodeQL and the Docker jobs (image build, test-integration)
 
 .PHONY: clean
 clean: ## Remove build and test artifacts

@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/kaeawc/golang-build/internal/db"
 	"github.com/kaeawc/golang-build/internal/testinfra"
 )
@@ -47,12 +45,7 @@ func newLive(t *testing.T, dsn, valkeyAddr string) *LiveBackend {
 
 func seedUsers(t *testing.T, dsn string, names ...string) []db.User {
 	t.Helper()
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	q := db.New(pool)
+	q := db.New(testinfra.NewPool(t, dsn))
 	out := make([]db.User, 0, len(names))
 	for _, n := range names {
 		u, err := q.CreateUser(t.Context(), n)

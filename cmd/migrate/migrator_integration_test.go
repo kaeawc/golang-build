@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/kaeawc/golang-build/internal/testinfra"
 )
@@ -44,20 +43,6 @@ func writeMigrations(t *testing.T, n int) string {
 	return dir
 }
 
-func tableExists(t *testing.T, dsn, table string) bool {
-	t.Helper()
-	conn, err := pgx.Connect(t.Context(), dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = conn.Close(context.Background()) }()
-	var ok bool
-	if err := conn.QueryRow(t.Context(), `SELECT to_regclass($1) IS NOT NULL`, table).Scan(&ok); err != nil {
-		t.Fatal(err)
-	}
-	return ok
-}
-
 func mustStatus(t *testing.T, m Migrator) Status {
 	t.Helper()
 	st, err := m.Status(t.Context())
@@ -85,7 +70,7 @@ func TestLiveMigratorStepUpAndDown(t *testing.T) {
 	if !st.HasVersion || st.CurrentVersion != 1 || len(st.Pending()) != 2 {
 		t.Errorf("after UpOne Status = %+v, want version 1, 2 pending", st)
 	}
-	if !tableExists(t, dsn, "t1") || tableExists(t, dsn, "t2") {
+	if !testinfra.TableExists(t, dsn, "t1") || testinfra.TableExists(t, dsn, "t2") {
 		t.Error("UpOne applied the wrong migrations")
 	}
 
@@ -102,8 +87,8 @@ func TestLiveMigratorStepUpAndDown(t *testing.T) {
 	if err := m.DownOne(ctx); err != nil {
 		t.Fatalf("DownOne: %v", err)
 	}
-	if st = mustStatus(t, m); st.CurrentVersion != 2 || tableExists(t, dsn, "t3") {
-		t.Errorf("after DownOne Status = %+v (t3 exists=%v), want version 2", st, tableExists(t, dsn, "t3"))
+	if st = mustStatus(t, m); st.CurrentVersion != 2 || testinfra.TableExists(t, dsn, "t3") {
+		t.Errorf("after DownOne Status = %+v (t3 exists=%v), want version 2", st, testinfra.TableExists(t, dsn, "t3"))
 	}
 
 	for range 2 {
@@ -148,13 +133,13 @@ func TestLiveMigratorRepoMigrations(t *testing.T) {
 	if err := m.UpAll(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !tableExists(t, dsn, "users") {
+	if !testinfra.TableExists(t, dsn, "users") {
 		t.Fatal("users table missing after UpAll")
 	}
 	if err := m.DownOne(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if tableExists(t, dsn, "users") {
+	if testinfra.TableExists(t, dsn, "users") {
 		t.Error("users table still exists after DownOne")
 	}
 }

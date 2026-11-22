@@ -21,7 +21,7 @@ make complexity      # gocyclo, flags functions over 10
 make security        # gosec
 make vuln            # govulncheck
 make licenses        # go-licenses check
-make check           # Fast pre-push gate; make ci runs everything CI does
+make check           # Fast pre-push gate; make ci runs everything CI does except CodeQL and the Docker jobs (image build, test-integration)
 make docker          # Build the server image from ci/Dockerfile
 ```
 

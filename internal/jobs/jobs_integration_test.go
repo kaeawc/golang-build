@@ -35,11 +35,7 @@ const waitTimeout = 30 * time.Second
 // newMigratedPool returns a pool on a fresh database with River's schema.
 func newMigratedPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool, err := pgxpool.New(t.Context(), stack.Postgres.NewDatabase(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
+	pool := testinfra.NewPool(t, stack.Postgres.NewDatabase(t))
 	if err := jobs.Migrate(t.Context(), pool); err != nil {
 		t.Fatalf("jobs.Migrate: %v", err)
 	}
@@ -162,11 +158,14 @@ func TestPingInsertsAreUnique(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := client.Insert(ctx, jobs.PingArgs{Message: "dup"}, nil)
+	// ByPeriod buckets on ScheduledAt (default: now) truncated to the
+	// minute; pin it so the two inserts cannot straddle a boundary.
+	opts := &river.InsertOpts{ScheduledAt: time.Now().Truncate(time.Minute)}
+	first, err := client.Insert(ctx, jobs.PingArgs{Message: "dup"}, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := client.Insert(ctx, jobs.PingArgs{Message: "dup"}, nil)
+	second, err := client.Insert(ctx, jobs.PingArgs{Message: "dup"}, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +174,7 @@ func TestPingInsertsAreUnique(t *testing.T) {
 			first.Job.ID, first.UniqueSkippedAsDuplicate, second.Job.ID, second.UniqueSkippedAsDuplicate)
 	}
 
-	other, err := client.Insert(ctx, jobs.PingArgs{Message: "different"}, nil)
+	other, err := client.Insert(ctx, jobs.PingArgs{Message: "different"}, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,6 +216,13 @@ func TestStopEscalatesToCancel(t *testing.T) {
 	if err := client.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	// Backstop if the test fails before jobs.Stop: release the pool's
+	// connections before newMigratedPool's cleanup closes it.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+		defer cancel()
+		_ = client.StopAndCancel(ctx)
+	})
 	if _, err := client.Insert(t.Context(), blockArgs{}, nil); err != nil {
 		t.Fatal(err)
 	}
