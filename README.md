@@ -10,7 +10,8 @@ Start a new project from it, run `make rename`, delete what you don't need.
 ## What's included
 
 - **HTTP API** (`cmd/server`) on `:8080`, routed with `net/http` ServeMux
-  behind a logging → recover → content-type middleware chain, with
+  (the /api routes behind a logging → recover → traffic → gzip →
+  content-type middleware chain), with
   Postgres (pgx + sqlc + golang-migrate), Valkey, and River background jobs.
 - **Terminal tools** built on a small reusable TUI framework
   (`internal/tui`, on Charm (bubbletea/lipgloss)).

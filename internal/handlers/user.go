@@ -23,6 +23,7 @@ type UserQuerier interface {
 func GetUsers(querier UserQuerier, c cache.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const cacheKey = "users"
+		w.Header().Set("Content-Type", "application/json")
 
 		cached, err := c.Get(r.Context(), cacheKey)
 		if err == nil {
