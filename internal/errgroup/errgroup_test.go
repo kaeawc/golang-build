@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
-	"time"
 
 	"github.com/kaeawc/golang-build/internal/limiter"
 )
@@ -155,20 +154,11 @@ func TestTryGoFailsWhenLimitExhausted(t *testing.T) {
 	g, _ := WithContext(context.Background())
 	g.SetLimit(2)
 
+	// Go acquires each permit synchronously before spawning, so both
+	// slots are taken as soon as these calls return.
 	hold := make(chan struct{})
 	g.Go(func() error { <-hold; return nil })
 	g.Go(func() error { <-hold; return nil })
-
-	// Wait for both Go calls to acquire; otherwise TryGo may race in.
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		// Best signal we have: TryGo should return false now.
-		ok := g.TryGo(func() error { return nil })
-		if !ok {
-			break
-		}
-		// Spawned a third — wait for it then try again.
-	}
 
 	if g.TryGo(func() error { return nil }) {
 		t.Error("TryGo should fail when limit is exhausted")

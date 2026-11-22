@@ -74,15 +74,14 @@ func TestAsyncWriter_CloseWhileSubmittingDoesNotPanic(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for first := true; ; first = false {
+		_ = w.Submit(func() (int64, error) { return 0, nil })
+		close(started)
+		for {
 			select {
 			case <-stop:
 				return
 			default:
 				_ = w.Submit(func() (int64, error) { return 0, nil })
-			}
-			if first {
-				close(started)
 			}
 		}
 	}()

@@ -29,8 +29,8 @@ func TestTracker_Enabled(t *testing.T) {
 		if timings[0].Name != "testPhase" {
 			t.Errorf("expected name=testPhase, got %s", timings[0].Name)
 		}
-		if timings[0].DurationMs < 0 {
-			t.Errorf("expected non-negative duration, got %d", timings[0].DurationMs)
+		if timings[0].DurationMs != 5 {
+			t.Errorf("expected duration = 5ms, got %d", timings[0].DurationMs)
 		}
 	})
 }

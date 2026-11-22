@@ -60,13 +60,12 @@ func TestRunDueFiresPeriodicJob(t *testing.T) {
 			t.Fatalf("fired = %d, want 1", got)
 		}
 
-		// Wait for the running flag to clear (job goroutine sets it false on
-		// completion via the deferred Store(false)). Use Stop to drain.
 		_ = s.Stop(context.Background())
 
 		// nextDue was advanced to runStart (101ms) + 100ms = 201ms.
-		clk.Advance(99 * time.Millisecond)
-		// Need a fresh scheduler since Stop closed wg; just check NextDue tracked it.
+		if next, ok := s.NextDue(); !ok || !next.Equal(time.Unix(0, 0).Add(201*time.Millisecond)) {
+			t.Errorf("NextDue = (%v, %v), want (201ms, true)", next, ok)
+		}
 	})
 }
 
@@ -120,8 +119,15 @@ func TestOneShotFiresOnceThenStops(t *testing.T) {
 		if _, ok := s.NextDue(); ok {
 			t.Errorf("NextDue should report no due jobs after one-shot completes")
 		}
+		// Even after a huge advance, no more invocations.
 		clk.Advance(time.Hour)
-		// Even after huge advance, no more invocations.
+		if n := s.RunDue(context.Background()); n != 0 {
+			t.Errorf("RunDue after one-shot launched %d, want 0", n)
+		}
+		synctest.Wait()
+		if got := fired.Load(); got != 1 {
+			t.Errorf("fired = %d, want 1", got)
+		}
 	})
 }
 
