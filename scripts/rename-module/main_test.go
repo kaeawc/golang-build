@@ -12,6 +12,7 @@ import (
 func testPlan() *plan {
 	return &plan{
 		oldModule: "github.com/kaeawc/golang-build", newModule: "github.com/you/app",
+		oldURL: "https://github.com/kaeawc/golang-build", newURL: "https://github.com/you/app",
 		oldName: "golang-build", newName: "app",
 		oldOwner: "kaeawc", newOwner: "you",
 	}
@@ -52,6 +53,26 @@ func TestReplaceAllNewModuleContainsOldName(t *testing.T) {
 	got, n := replaceAll([]byte("module github.com/kaeawc/golang-build\n"), p.rules("go.mod"))
 	if want := "module github.com/you/golang-build-fork\n"; string(got) != want || n != 1 {
 		t.Errorf("got %q (%d replacements), want %q (1)", got, n, want)
+	}
+}
+
+func TestReplaceAllMajorVersionModule(t *testing.T) {
+	// Imports carry /v2; web links name the repository, which doesn't.
+	p := testPlan()
+	p.newModule, p.newURL = "github.com/you/app/v2", "https://github.com/you/app"
+	in := `import "github.com/kaeawc/golang-build/internal/x" // https://github.com/kaeawc/golang-build/security/advisories/new`
+	want := `import "github.com/you/app/v2/internal/x" // https://github.com/you/app/security/advisories/new`
+	if got, _ := replaceAll([]byte(in), p.rules("x.go")); string(got) != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}
+
+func TestProjectNameQuoting(t *testing.T) {
+	for _, line := range []string{"project_name: golang-build", `project_name: "golang-build"`, "project_name: 'golang-build'  "} {
+		m := projectRE.FindStringSubmatch("version: 2\n" + line + "\n")
+		if m == nil || m[1] != "golang-build" {
+			t.Errorf("projectRE on %q = %q, want golang-build", line, m)
+		}
 	}
 }
 

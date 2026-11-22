@@ -22,7 +22,7 @@ make vuln            # govulncheck
 make licenses        # go-licenses check
 make check           # Fast pre-push gate; make ci runs everything CI does
 make docker          # Build the server image from ci/Dockerfile
-make rename MODULE=github.com/you/app [NAME=app]   # Rename module + project (scripts/rename-module)
+make rename MODULE=github.com/you/app [NAME=app]   # Rename module + project (scripts/rename-module); make rename-test proves it
 ```
 
 Dev tools are pinned in `tools/go.mod` with `tool` directives and run via
@@ -52,4 +52,4 @@ install beyond Go.
 
 ## CI Pipeline
 
-Defined in `.github/workflows/commit.yml`. Runs on PRs and pushes to `main`. Jobs: `compile-binary`, `build-image` (depends on compile; pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security`, `vulnerabilities`, `release-config`, `template-rename`, `codeql-analysis`. Each maps to a `make` target. Go version is read from `go.mod`. `deploy.yml` runs after `commit.yml` succeeds on `main`; `release.yml` runs on `v*` tags.
+Defined in `.github/workflows/commit.yml`. Runs on PRs and pushes to `main`. Jobs: `compile-binary`, `build-image` (depends on compile; pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security`, `vulnerabilities`, `release-config`, `template-rename` (`make rename-test`), `codeql-analysis`. Each maps to a `make` target. Go version is read from `go.mod`. `deploy.yml` runs after `commit.yml` succeeds on `main`; `release.yml` runs on `v*` tags.

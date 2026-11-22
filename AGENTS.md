@@ -75,7 +75,7 @@ Use focused package tests while iterating: `go test ./internal/handlers/ -run Te
 ## CI
 
 `.github/workflows/commit.yml` runs on PRs and pushes to `main`:
-`compile-binary`, `build-image` (pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security` (gosec), `vulnerabilities` (govulncheck), `release-config` (goreleaser check), `template-rename` (`make rename` on a scratch copy, then build + test), `codeql-analysis`. Each job is a `make` target, so `make ci` reproduces it locally. Go version comes from `go.mod`.
+`compile-binary`, `build-image` (pushes to GHCR only from `main`), `test` (race + coverage), `complexity`, `static-analysis` (tidy, format, vet, golangci-lint, actionlint), `check-licenses`, `security` (gosec), `vulnerabilities` (govulncheck), `release-config` (goreleaser check), `template-rename` (`make rename-test`: rename a scratch copy, then check + build), `codeql-analysis`. Each job is a `make` target, so `make ci` reproduces it locally. Go version comes from `go.mod`.
 `deploy.yml` deploys to Fly after `commit.yml` succeeds on a push to `main`; `release.yml` publishes on `v*` tags.
 
 ## Conventions

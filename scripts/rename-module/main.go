@@ -93,7 +93,7 @@ func run(ctx context.Context, opts options, out io.Writer) error {
 		return nil
 	}
 	if err := writeChanges(opts.dir, changes); err != nil {
-		return err
+		return fmt.Errorf("%w (the tree was clean: undo the partial rename with `git checkout -- .`)", err)
 	}
 	return finish(ctx, opts, out)
 }
@@ -109,7 +109,9 @@ func (p *plan) report(out io.Writer, changes []change, dryRun bool) {
 		fmt.Fprintf(out, "  %-50s %d\n", c.path, c.count)
 	}
 	if p.oldOwner != "" && p.newOwner == "" {
-		fmt.Fprintf(out, "Note: %s is not on github.com, so .github/CODEOWNERS still names @%s; edit it by hand.\n", p.newModule, p.oldOwner)
+		fmt.Fprintf(out, "Note: %s is not on github.com: .github/CODEOWNERS still names @%s, and GitHub-only links\n"+
+			"(e.g. security advisories in .github/ISSUE_TEMPLATE/config.yml) now point at %s; edit them by hand.\n",
+			p.newModule, p.oldOwner, p.newURL)
 	}
 }
 
@@ -141,6 +143,7 @@ func finish(ctx context.Context, opts options, out io.Writer) error {
 // plan holds the replacement rules derived from the current tree and flags.
 type plan struct {
 	oldModule, newModule string
+	oldURL, newURL       string // repository web URLs: module path minus /vN
 	oldName, newName     string
 	oldOwner, newOwner   string
 }
@@ -167,13 +170,14 @@ func newPlan(opts options) (*plan, error) {
 	if p.oldName, err = readField(filepath.Join(opts.dir, ".goreleaser.yaml"), projectRE); err != nil {
 		return nil, err
 	}
+	p.oldURL, p.newURL = "https://"+repoPath(p.oldModule), "https://"+repoPath(p.newModule)
 	p.oldOwner, p.newOwner = githubOwner(p.oldModule), githubOwner(p.newModule)
 	return p, nil
 }
 
 var (
 	moduleRE  = regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
-	projectRE = regexp.MustCompile(`(?m)^project_name:\s*"?([^"\s]+)"?\s*$`)
+	projectRE = regexp.MustCompile(`(?m)^project_name:\s*["']?([^"'\s]+)["']?\s*$`)
 	nameRE    = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
 	// Deliberately stricter than the go command: what's safe to splice into
 	// YAML, TOML, shell and Go source unquoted.
@@ -188,13 +192,19 @@ func validateModule(m string) error {
 	return nil
 }
 
+// repoPath strips a major-version suffix: github.com/you/app/v2 lives in
+// the repository github.com/you/app.
+func repoPath(module string) string {
+	if i := strings.LastIndexByte(module, '/'); i > 0 && majorRE.MatchString(module[i+1:]) {
+		return module[:i]
+	}
+	return module
+}
+
 // deriveName turns github.com/you/My_App/v2 into my-app.
 func deriveName(module string) string {
-	elems := strings.Split(module, "/")
-	last := elems[len(elems)-1]
-	if majorRE.MatchString(last) && len(elems) > 1 {
-		last = elems[len(elems)-2]
-	}
+	repo := repoPath(module)
+	last := repo[strings.LastIndexByte(repo, '/')+1:]
 	return strings.ToLower(strings.NewReplacer("_", "-", ".", "-").Replace(last))
 }
 
@@ -234,9 +244,14 @@ func (p *plan) rules(path string) []rule {
 	var rs []rule
 	// Order matters: at a given offset the first matching rule wins, so the
 	// module path is consumed before its trailing name could match.
+	if p.oldURL != p.newURL {
+		// Web links name the repository, which drops a /vN module suffix:
+		// "https://github.com/o/x/issues", "https://github.com/o/x.git".
+		rs = append(rs, rule{p.oldURL, p.newURL, ident + ".-", ident + "-", false})
+	}
 	if p.oldModule != p.newModule {
-		// github.com/o/x matches in "github.com/o/x/internal" and
-		// "https://github.com/o/x.git", not in "github.com/o/x-fork".
+		// github.com/o/x matches in "github.com/o/x/internal", not in
+		// "github.com/o/x-fork".
 		rs = append(rs, rule{p.oldModule, p.newModule, ident + ".-", ident + "-", false})
 	}
 	if p.oldName != p.newName {
@@ -252,16 +267,17 @@ func (p *plan) rules(path string) []rule {
 }
 
 func replaceAll(src []byte, rules []rule) ([]byte, int) {
-	if !containsAny(src, rules) {
+	s := string(src)
+	if !containsAny(s, rules) {
 		return src, 0
 	}
-	var out bytes.Buffer
-	out.Grow(len(src))
+	var out strings.Builder
+	out.Grow(len(s))
 	n := 0
-	for i := 0; i < len(src); {
-		r, ok := matchAt(src, i, rules)
+	for i := 0; i < len(s); {
+		r, ok := matchAt(s, i, rules)
 		if !ok {
-			out.WriteByte(src[i])
+			out.WriteByte(s[i])
 			i++
 			continue
 		}
@@ -269,28 +285,28 @@ func replaceAll(src []byte, rules []rule) ([]byte, int) {
 		i += len(r.old)
 		n++
 	}
-	return out.Bytes(), n
+	return []byte(out.String()), n
 }
 
-func containsAny(src []byte, rules []rule) bool {
+func containsAny(s string, rules []rule) bool {
 	for _, r := range rules {
-		if bytes.Contains(src, []byte(r.old)) {
+		if strings.Contains(s, r.old) {
 			return true
 		}
 	}
 	return false
 }
 
-func matchAt(src []byte, i int, rules []rule) (rule, bool) {
+func matchAt(s string, i int, rules []rule) (rule, bool) {
 	for _, r := range rules {
-		if bytes.HasPrefix(src[i:], []byte(r.old)) && r.startsToken(src, i) && r.endsToken(src, i+len(r.old)) {
+		if strings.HasPrefix(s[i:], r.old) && r.startsToken(s, i) && r.endsToken(s, i+len(r.old)) {
 			return r, true
 		}
 	}
 	return rule{}, false
 }
 
-func (r rule) startsToken(src []byte, i int) bool {
+func (r rule) startsToken(src string, i int) bool {
 	if i == 0 {
 		return true
 	}
@@ -301,7 +317,7 @@ func (r rule) startsToken(src []byte, i int) bool {
 	return !r.notInPath || !singleSlash
 }
 
-func (r rule) endsToken(src []byte, j int) bool {
+func (r rule) endsToken(src string, j int) bool {
 	return j == len(src) || strings.IndexByte(r.notAfter, src[j]) < 0
 }
 

@@ -18,7 +18,8 @@ make check     # tidy-check, vet, golangci-lint, race tests
 
 `make check` is the pre-push gate and should pass on every commit you push.
 `make ci` runs everything CI runs, adding gocyclo, gosec, govulncheck,
-go-licenses and actionlint. Other useful targets:
+go-licenses, actionlint and `make rename-test` (the template rename on a
+scratch copy). Other useful targets:
 
 - `make fmt`: format with gofumpt + goimports (CI fails on a diff).
 - `make lint-fix`: apply golangci-lint's automatic fixes.

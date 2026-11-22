@@ -260,8 +260,9 @@ jobs:
 
   template-rename:
     # Proves `make rename` still turns the template into a working project:
-    # rename a scratch copy to a throwaway module path, then build and test
-    # it there. Delete this job once you have renamed your copy.
+    # renames a scratch copy to a throwaway module path, checks nothing
+    # names the old one, then formats, lints, tests and builds it there.
+    # Delete this job once you have renamed your copy.
     runs-on: ubuntu-latest
     steps:
       - name: "Git Checkout"
@@ -277,27 +278,8 @@ jobs:
             go.sum
             tools/go.sum
 
-      - name: "Copy the repo to a scratch directory"
-        run: |
-          cp -a "$GITHUB_WORKSPACE/." "$RUNNER_TEMP/renamed"
-          echo "OLD_MODULE=$(go list -m)" >> "$GITHUB_ENV"
-
-      - name: "make rename (rewrites, go mod tidy, make check)"
-        working-directory: ${{ runner.temp }}/renamed
-        run: make rename MODULE=example.com/throwaway/renamed-app
-
-      - name: "No reference to the old module path is left"
-        working-directory: ${{ runner.temp }}/renamed
-        run: |
-          test "$(go list -m)" = example.com/throwaway/renamed-app
-          if git grep -nIF "$OLD_MODULE" -- ':!scripts/rename-module/'; then
-            echo "::error::rename left references to $OLD_MODULE"
-            exit 1
-          fi
-
-      - name: "Build every binary in the renamed copy"
-        working-directory: ${{ runner.temp }}/renamed
-        run: make build
+      - name: "Rename a scratch copy, then check, build and test it"
+        run: make rename-test
 
   codeql-analysis:
     runs-on: ubuntu-latest

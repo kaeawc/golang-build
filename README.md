@@ -108,15 +108,17 @@ The TUIs run without a database:
    `tools/go.mod`, every import and the goimports prefix; the project name
    in `.goreleaser.yaml`, `fly.toml`, the Docker image tag, the Fly app
    names in the workflows and scripts, `package.json`, the web UI and the
-   docs; and the owner in `.github/CODEOWNERS` (GitHub paths only). It
+   docs; repository links (minus any `/vN` suffix); and the owner in
+   `.github/CODEOWNERS` (GitHub paths only). It
    prints every file it changed, then runs `go mod tidy` and `make check`.
    It refuses to run on a dirty tree, so `git diff` shows exactly what
    changed, and re-running it with the same arguments is a no-op. Add
    `-dry-run` (via `go run ./scripts/rename-module -module ... -dry-run`) to
    preview.
 3. Update `LICENSE` (copyright holder) — the script leaves it alone.
-4. Trim what you don't need (below), then delete `scripts/rename-module` and
-   the `template-rename` CI job.
+4. Trim what you don't need (below), then delete `scripts/rename-module/`,
+   `scripts/rename-test.sh`, the `rename` / `rename-test` Makefile targets
+   (and `rename-test` from `make ci`) and the `template-rename` CI job.
 
 ## Make targets
 
@@ -139,6 +141,7 @@ The TUIs run without a database:
 | `make ci` | Everything CI runs (except CodeQL and the image build) |
 | `make release-snapshot` | Build a local goreleaser snapshot into dist/ (needs goreleaser) |
 | `make rename` | Make the template yours: make rename MODULE=github.com/you/app [NAME=app] |
+| `make rename-test` | Rename a scratch copy to a throwaway module, then lint, test and build it |
 
 ## CI and releases
 
@@ -149,8 +152,9 @@ The TUIs run without a database:
   `complexity`, `static-analysis` (tidy, format, vet, golangci-lint,
   actionlint), `check-licenses`, `security` (gosec), `vulnerabilities`
   (govulncheck), `release-config` (goreleaser check), `template-rename`
-  (renames a scratch copy to a throwaway module, then builds and tests it)
-  and `codeql-analysis`. The Go version comes from `go.mod`.
+  (`make rename-test`: renames a scratch copy to a throwaway module, checks
+  nothing names the old one, then formats, lints, tests and builds it) and
+  `codeql-analysis`. The Go version comes from `go.mod`.
 - **`deploy.yml`** deploys `main` to Fly.io once `commit.yml` passes on it,
   then smoke-tests `/healthz`.
 - **`preview.yml`**: a maintainer comments `preview` (or `preview 1h`) on a
