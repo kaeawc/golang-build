@@ -209,9 +209,9 @@ What each binary pulls in from `internal/`:
 | --- | --- |
 | `onboard`, `loadgen`, `scaffold`, `migrate` | `internal/tui` once all TUIs are gone |
 
-`make pgo` builds `cmd/loadgen`. If you delete loadgen, also delete `make pgo`,
-`scripts/pgo.sh` and `cmd/server/pgo_harness_test.go`'s `TestMain`, or point
-the script at another load generator. `cmd/server/default.pgo` can stay.
+`make pgo` builds `cmd/loadgen`. If you delete loadgen, also delete the `pgo`
+Makefile target and `scripts/pgo.sh`. The committed `cmd/server/default.pgo`
+keeps working until the next time you'd refresh it.
 | `admin` | `internal/tui` |
 | `devup` | `internal/proc`, `internal/tui` |
 | `inspect` | `internal/eventbus`, `internal/tui` |

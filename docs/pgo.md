@@ -114,6 +114,8 @@ and unmatched samples are ignored. Refresh the profile:
 - After a change to the request hot path: middleware, handlers, the router,
   or JSON and gzip encoding.
 - After a Go toolchain upgrade (each release changes inlining and the runtime).
+- After `make rename`. Profile symbols carry the module path, so after a
+  rename the samples for this module's packages no longer match anything.
 - When production traffic shifts, for example to a new heavy endpoint.
 - In any case, every few months, so the profile keeps up with the code.
 
