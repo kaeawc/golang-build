@@ -44,8 +44,12 @@ func FuzzLoad(f *testing.F) {
 		if cfg.DatabaseURL != strings.TrimSpace(dbURL) {
 			t.Fatalf("DatabaseURL = %q, want trimmed %q", cfg.DatabaseURL, dbURL)
 		}
-		if strings.TrimSpace(directURL) == "" && cfg.MigrationDatabaseURL != cfg.DatabaseURL {
-			t.Fatalf("MigrationDatabaseURL = %q, want fallback to DatabaseURL %q", cfg.MigrationDatabaseURL, cfg.DatabaseURL)
+		wantMigrate := strings.TrimSpace(directURL)
+		if wantMigrate == "" {
+			wantMigrate = cfg.DatabaseURL
+		}
+		if cfg.MigrationDatabaseURL != wantMigrate {
+			t.Fatalf("MigrationDatabaseURL = %q, want %q", cfg.MigrationDatabaseURL, wantMigrate)
 		}
 		for name, v := range map[string]string{
 			"Port":                 cfg.Port,

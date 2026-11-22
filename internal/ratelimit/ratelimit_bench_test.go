@@ -32,10 +32,14 @@ func BenchmarkBucketAllow(b *testing.B) {
 	})
 	b.Run("fake-clock", func(b *testing.B) {
 		// Isolates the bucket's own arithmetic and locking from time.Now.
-		bucket := New(clock.NewFake(time.Unix(0, 0)), 1, 1<<30)
+		// The frozen clock never refills, so the burst must outlast any
+		// BENCHTIME or the tail of the run would measure the denied path.
+		bucket := New(clock.NewFake(time.Unix(0, 0)), 1, 1<<62)
 		b.ReportAllocs()
 		for b.Loop() {
-			bucket.Allow()
+			if !bucket.Allow() {
+				b.Fatal("bucket ran dry; raise its burst")
+			}
 		}
 	})
 }

@@ -36,7 +36,11 @@ jobs:
 
       - name: "Discover fuzz targets"
         id: list
-        run: echo "targets=$(bash scripts/fuzz.sh -json)" >> "$GITHUB_OUTPUT"
+        # Assign first: a failing command substitution inside echo would be
+        # masked by echo's own success and leave the matrix empty.
+        run: |
+          targets=$(bash scripts/fuzz.sh -json)
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
 
   fuzz:
     name: "fuzz (${{ matrix.target.name }})"

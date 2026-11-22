@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,14 +14,10 @@ import (
 // digits, and dashes — ASCII underscores are allowed but discouraged.
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-// reservedNames are Go keywords / blank identifiers we forbid as names.
+// reservedNames are identifiers we forbid besides Go keywords, which
+// token.IsKeyword covers so the list cannot fall behind the language.
 var reservedNames = map[string]struct{}{
-	"_": {}, "go": {}, "if": {}, "for": {}, "var": {}, "func": {},
-	"map": {}, "type": {}, "case": {}, "else": {}, "defer": {},
-	"break": {}, "const": {}, "range": {}, "return": {}, "select": {},
-	"struct": {}, "switch": {}, "import": {}, "package": {},
-	"chan": {}, "goto": {}, "continue": {}, "fallthrough": {}, "interface": {},
-	"default": {}, "main": {},
+	"main": {},
 }
 
 // validateName returns nil if name is a legal scaffold target.
@@ -28,7 +25,7 @@ func validateName(name string) error {
 	if !nameRe.MatchString(name) {
 		return errors.New("name must be lowercase, start with a letter, and contain only [a-z0-9_]")
 	}
-	if _, ok := reservedNames[name]; ok {
+	if _, ok := reservedNames[name]; ok || token.IsKeyword(name) {
 		return fmt.Errorf("%q is reserved", name)
 	}
 	return nil

@@ -27,9 +27,9 @@ func FuzzGetInt(f *testing.F) {
 		}
 
 		// Whatever GetInt returns must survive formatting and re-reading.
-		back, err := GetInt(Map{"N": strconv.Itoa(def)}, "N", 0)
-		if err != nil || back != def {
-			t.Fatalf("round trip %d: got %d, %v", def, back, err)
+		back, err := GetInt(Map{"N": strconv.Itoa(got)}, "N", 0)
+		if err != nil || back != got {
+			t.Fatalf("round trip %d: got %d, %v", got, back, err)
 		}
 	})
 }
