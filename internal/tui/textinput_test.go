@@ -81,6 +81,31 @@ func TestTextInputErrorClearedOnKeystroke(t *testing.T) {
 	}
 }
 
+func TestTextInputErrorSurvivesNonKeyMessages(t *testing.T) {
+	ti := NewTextInput("name", "t", "p", "ph", nil)
+	next, _ := ti.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	cur := next.(TextInput)
+	// Blink ticks and terminal/window messages arrive without user input
+	// and must not hide the validation error.
+	for _, msg := range []tea.Msg{
+		ti.Init()(),
+		tea.WindowSizeMsg{Width: 80, Height: 24},
+	} {
+		n, _ := cur.Update(msg)
+		cur = n.(TextInput)
+		if cur.errMsg == "" {
+			t.Fatalf("errMsg cleared by %T", msg)
+		}
+	}
+}
+
+func TestTextInputAcceptsQ(t *testing.T) {
+	cur := typeText(NewTextInput("name", "t", "p", "ph", nil), "queue")
+	if got := cur.input.Value(); got != "queue" {
+		t.Errorf("value = %q, want %q", got, "queue")
+	}
+}
+
 func TestTextInputTrimsWhitespace(t *testing.T) {
 	ti := NewTextInput("name", "t", "p", "ph", nil)
 	cur := typeText(ti, "  foo  ")

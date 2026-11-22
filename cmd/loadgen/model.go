@@ -84,7 +84,7 @@ func durationItems() []tui.PickerItem {
 func (m model) Init() tea.Cmd { return tui.PhaseInit(m.phase) }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if cmd := tui.HandleGlobal(msg); cmd != nil {
+	if cmd := tui.HandleGlobal(msg, m.phase); cmd != nil {
 		if m.cancel != nil {
 			m.cancel()
 		}
@@ -140,8 +140,5 @@ func (m model) onDashboardDone(msg tui.LiveDoneMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	if m.err != nil {
-		return tea.NewView(tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n")
-	}
-	return tea.NewView(m.phase.View())
+	return tui.RootView(m.err, m.phase)
 }

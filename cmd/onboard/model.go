@@ -43,7 +43,7 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if cmd := tui.HandleGlobal(msg); cmd != nil {
+	if cmd := tui.HandleGlobal(msg, m.phase); cmd != nil {
 		return m, cmd
 	}
 
@@ -86,10 +86,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	if m.err != nil {
-		return tea.NewView(tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n")
-	}
-	return tea.NewView(m.phase.View())
+	return tui.RootView(m.err, m.phase)
 }
 
 // ---------- phase factories -------------------------------------------------

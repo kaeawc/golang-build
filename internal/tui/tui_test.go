@@ -179,7 +179,7 @@ func TestAsyncTaskPropagatesError(t *testing.T) {
 }
 
 func TestHandleGlobalQuitsOnQ(t *testing.T) {
-	cmd := HandleGlobal(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	cmd := HandleGlobal(tea.KeyPressMsg{Code: 'q', Text: "q"}, NewPicker("t", "t", nil, []PickerItem{{Label: "a"}}))
 	if cmd == nil {
 		t.Fatalf("expected quit cmd")
 	}
@@ -190,8 +190,32 @@ func TestHandleGlobalQuitsOnQ(t *testing.T) {
 }
 
 func TestHandleGlobalIgnoresOtherKeys(t *testing.T) {
-	if cmd := HandleGlobal(tea.KeyPressMsg{Code: 'a', Text: "a"}); cmd != nil {
+	if cmd := HandleGlobal(tea.KeyPressMsg{Code: 'a', Text: "a"}, NewPicker("t", "t", nil, []PickerItem{{Label: "a"}})); cmd != nil {
 		t.Errorf("expected nil cmd for non-quit key")
+	}
+}
+
+func TestHandleGlobalLetsTextInputTypeQ(t *testing.T) {
+	ti := NewTextInput("name", "t", "p", "ph", nil)
+	if cmd := HandleGlobal(tea.KeyPressMsg{Code: 'q', Text: "q"}, ti); cmd != nil {
+		t.Errorf("q must reach a TextInput, got a global cmd")
+	}
+	cmd := HandleGlobal(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}, ti)
+	if cmd == nil {
+		t.Fatalf("ctrl+c must still quit while a TextInput is active")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("expected QuitMsg")
+	}
+}
+
+func TestRootView(t *testing.T) {
+	p := NewPicker("t", "Pick one", nil, []PickerItem{{Label: "a"}})
+	if got := RootView(nil, p).Content; !strings.Contains(got, "Pick one") {
+		t.Errorf("expected phase view, got %q", got)
+	}
+	if got := RootView(errors.New("boom"), p).Content; !strings.Contains(got, "boom") || strings.Contains(got, "Pick one") {
+		t.Errorf("expected error view only, got %q", got)
 	}
 }
 

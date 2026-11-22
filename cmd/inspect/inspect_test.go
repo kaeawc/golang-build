@@ -237,6 +237,9 @@ func TestRunHeadlessHappyPath(t *testing.T) {
 	if !strings.Contains(out, "stopped") {
 		t.Errorf("missing 'stopped' in output: %s", out)
 	}
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("headless output to a non-terminal must not contain ANSI escapes: %q", out)
+	}
 }
 
 func TestRunHeadlessRejectsBadScenario(t *testing.T) {

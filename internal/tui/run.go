@@ -6,7 +6,8 @@ import (
 
 // Run wraps tea.NewProgram with sensible defaults (alt-screen, mouse
 // off) and returns the final model. Callers can pass additional
-// tea.ProgramOption values.
+// tea.ProgramOption values. Use RunInline to render in the normal
+// screen buffer instead.
 func Run(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
 	p := tea.NewProgram(altScreen{m}, opts...)
 	final, err := p.Run()
@@ -14,6 +15,13 @@ func Run(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
 		final = a.Model
 	}
 	return final, err
+}
+
+// RunInline is Run without the alternate screen, so the final frame
+// stays in the terminal scrollback. The model's own View decides
+// AltScreen.
+func RunInline(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
+	return tea.NewProgram(m, opts...).Run()
 }
 
 // altScreen enables the alternate screen on every frame. Bubble Tea v2

@@ -35,7 +35,7 @@ func newModel() model {
 func (m model) Init() tea.Cmd { return tui.PhaseInit(m.phase) }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if cmd := tui.HandleGlobal(msg); cmd != nil {
+	if cmd := tui.HandleGlobal(msg, m.phase); cmd != nil {
 		// Stop the producer + inspector before quitting so the goroutines
 		// don't outlive the program.
 		m.shutdown()
@@ -53,10 +53,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	if m.err != nil {
-		return tea.NewView(tui.ErrorStyle.Render("error: ") + m.err.Error() + "\n")
-	}
-	return tea.NewView(m.phase.View())
+	return tui.RootView(m.err, m.phase)
 }
 
 func (m *model) shutdown() {
