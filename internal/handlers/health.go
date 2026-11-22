@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"sync/atomic"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Cache window for the DB ping. Fly probes /healthz every ~15s, but other
@@ -14,12 +12,17 @@ import (
 // connection from being burned per probe.
 const healthCacheTTL = 5 * time.Second
 
+// Pinger is the part of *pgxpool.Pool the health handlers use.
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 type healthState struct {
 	at      time.Time
 	healthy bool
 }
 
-func Health(pool *pgxpool.Pool) http.HandlerFunc {
+func Health(pool Pinger) http.HandlerFunc {
 	var state atomic.Pointer[healthState]
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

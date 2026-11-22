@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/kaeawc/golang-build/internal/cache"
 	"github.com/kaeawc/golang-build/internal/middleware"
 )
@@ -28,7 +26,7 @@ func AdminTraffic(rec *middleware.TrafficRecorder) http.HandlerFunc {
 	}
 }
 
-func AdminHealthchecks(pool *pgxpool.Pool, c cache.Cache) http.HandlerFunc {
+func AdminHealthchecks(pool Pinger, c cache.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -41,7 +39,7 @@ func AdminHealthchecks(pool *pgxpool.Pool, c cache.Cache) http.HandlerFunc {
 	}
 }
 
-func probeDB(ctx context.Context, pool *pgxpool.Pool) Probe {
+func probeDB(ctx context.Context, pool Pinger) Probe {
 	start := time.Now()
 	err := pool.Ping(ctx)
 	dur := time.Since(start)
@@ -76,6 +74,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 		http.Error(w, "encode error", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(data); err != nil {
 		log.Printf("write error: %v", err)
 	}

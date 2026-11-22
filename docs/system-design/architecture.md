@@ -4,7 +4,7 @@
 
 ## Components
 
-- **API** — Go HTTP server (`cmd/server`), routes via `gorilla/mux`.
+- **API** — Go HTTP server (`cmd/server`), routes via the standard library `http.ServeMux`.
 - **Frontend** — React + Vite SPA in `web/`, served by the Go process from baked-in `web/dist/`.
 - **Database** — Neon serverless Postgres.
 - **Cache** — Valkey (Redis-compatible).

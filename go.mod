@@ -10,7 +10,6 @@ require (
 	charm.land/lipgloss/v2 v2.1.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/jsonschema-go v0.4.3
-	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/klauspost/compress v1.20.5
