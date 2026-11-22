@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 
@@ -14,6 +14,7 @@ import (
 	"github.com/kaeawc/golang-build/internal/db"
 	"github.com/kaeawc/golang-build/internal/env"
 	"github.com/kaeawc/golang-build/internal/handlers"
+	"github.com/kaeawc/golang-build/internal/httpmw"
 	"github.com/kaeawc/golang-build/internal/httpserver"
 	"github.com/kaeawc/golang-build/internal/jobs"
 	"github.com/kaeawc/golang-build/internal/middleware"
@@ -51,7 +52,7 @@ func main() {
 	}
 	coord.Register("river", jobs.Stop(riverClient))
 
-	router := buildRouter(pool, c)
+	router := buildRouter(pool, db.New(pool), c)
 
 	if cfg.Fly.OnFly() {
 		log.Printf("Server starting on :%s (env=%s, fly app=%s region=%s machine=%s)",
@@ -113,27 +114,28 @@ func bootResources(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, cach
 	return pool, c, nil
 }
 
-func buildRouter(pool *pgxpool.Pool, c cache.Cache) *mux.Router {
-	router := mux.NewRouter()
-
-	router.HandleFunc("/healthz", handlers.Health(pool)).Methods("GET")
-
+// buildRouter wires the routing table with net/http patterns. A GET
+// pattern also serves HEAD. The SPA is registered as "GET /", so it
+// catches every unmatched GET while a wrong method on any route gets
+// 405 with an Allow header. The /api middleware wraps each API route
+// rather than a sub-mux, so unmatched requests never reach it (the
+// traffic recorder only sees real routes).
+func buildRouter(pool *pgxpool.Pool, users handlers.UserQuerier, c cache.Cache) *http.ServeMux {
 	traffic := middleware.NewTrafficRecorder()
+	api := httpmw.Compose(
+		middleware.Logging,
+		middleware.Recover,
+		traffic.Middleware,
+		middleware.ContentType,
+		middleware.Gzip,
+	)
 
-	api := router.PathPrefix("/api").Subrouter()
-	api.Use(middleware.Logging)
-	api.Use(middleware.Recover)
-	api.Use(traffic.Middleware)
-	api.Use(middleware.ContentType)
-	api.Use(middleware.Gzip)
-	api.HandleFunc("/users", handlers.GetUsers(db.New(pool), c)).Methods("GET")
-
-	admin := api.PathPrefix("/admin").Subrouter()
-	admin.HandleFunc("/traffic", handlers.AdminTraffic(traffic)).Methods("GET")
-	admin.HandleFunc("/healthchecks", handlers.AdminHealthchecks(pool, c)).Methods("GET")
-
-	router.HandleFunc("/ws", handlers.WebSocket())
-
-	router.PathPrefix("/").Handler(handlers.NewSPAHandler("web/dist", "index.html"))
-	return router
+	mux := http.NewServeMux()
+	mux.Handle("GET /healthz", handlers.Health(pool))
+	mux.Handle("GET /api/users", api(handlers.GetUsers(users, c)))
+	mux.Handle("GET /api/admin/traffic", api(handlers.AdminTraffic(traffic)))
+	mux.Handle("GET /api/admin/healthchecks", api(handlers.AdminHealthchecks(pool, c)))
+	mux.Handle("GET /ws", handlers.WebSocket())
+	mux.Handle("GET /", handlers.NewSPAHandler("web/dist", "index.html"))
+	return mux
 }

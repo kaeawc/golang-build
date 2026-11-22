@@ -3,7 +3,7 @@ Experimental Go build tooling, references, and CI pipeline.
 
 ## Binaries
 
-- `cmd/server` — HTTP API on `:8080` (gorilla/mux + middleware chain).
+- `cmd/server` — HTTP API on `:8080` (net/http ServeMux + middleware chain).
 - `cmd/onboard` — interactive TUI wizard that generates a `.env` for the server.
 - `cmd/loadgen` — TUI HTTP load generator with a live-updating dashboard.
 - `cmd/scaffold` — TUI code generator: pick handler/middleware/package + name → write boilerplate file.

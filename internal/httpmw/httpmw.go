@@ -1,7 +1,8 @@
 // Package httpmw provides composable HTTP middleware for Go services.
 //
-// All middleware are `func(http.Handler) http.Handler` so they chain via
-// `router.Use` (gorilla/mux, chi) or stack directly via `Compose`.
+// All middleware are `func(http.Handler) http.Handler`, so they wrap any
+// handler registered on a net/http ServeMux (or a third-party router)
+// and stack directly via `Compose`.
 //
 //	chain := httpmw.Compose(
 //	    httpmw.RequestID(idgen.NewUUID()),

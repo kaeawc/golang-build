@@ -76,6 +76,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 		http.Error(w, "encode error", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(data); err != nil {
 		log.Printf("write error: %v", err)
 	}

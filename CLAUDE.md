@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Experimental Go HTTP server with CI pipeline tooling. Uses `gorilla/mux` for routing and serves a JSON API on port 8080.
+Experimental Go HTTP server with CI pipeline tooling. Uses the standard library `http.ServeMux` (method + wildcard patterns) for routing and serves a JSON API on port 8080.
 
 ## Build & Development Commands
 
@@ -30,7 +30,7 @@ install beyond Go.
 
 ## Architecture
 
-- **`cmd/server/main.go`** — Entry point. Sets up the mux router with middleware chain (Logging → Recover → ContentType) and starts the HTTP server.
+- **`cmd/server/main.go`** — Entry point. `buildRouter` registers `http.ServeMux` patterns (`"GET /api/users"`, SPA on `"GET /"`, so wrong methods get 405) and wraps each `/api` route in the `httpmw.Compose` chain (Logging → Recover → Traffic → ContentType → Gzip), then starts the HTTP server.
 - **`cmd/onboard/`** — TUI wizard that walks the user through generating a `.env` for the server. Demonstrates the `internal/tui` framework.
 - **`cmd/loadgen/`** — TUI HTTP load generator with a live-updating dashboard. Demonstrates the `LiveView` phase.
 - **`cmd/scaffold/`** — TUI code generator. Demonstrates the `TextInput` phase with inline validation.
