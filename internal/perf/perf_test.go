@@ -4,32 +4,35 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/kaeawc/golang-build/internal/clock"
 )
 
 func TestTracker_Enabled(t *testing.T) {
-	tracker := New(true)
+	synctest.Test(t, func(t *testing.T) {
+		tracker := New(true)
 
-	err := tracker.Track("testPhase", func() error {
-		time.Sleep(5 * time.Millisecond)
-		return nil
+		err := tracker.Track("testPhase", func() error {
+			time.Sleep(5 * time.Millisecond) // virtual time
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Track returned error: %v", err)
+		}
+
+		timings := tracker.GetTimings()
+		if len(timings) != 1 {
+			t.Fatalf("expected 1 timing entry, got %d", len(timings))
+		}
+		if timings[0].Name != "testPhase" {
+			t.Errorf("expected name=testPhase, got %s", timings[0].Name)
+		}
+		if timings[0].DurationMs != 5 {
+			t.Errorf("expected duration = 5ms, got %d", timings[0].DurationMs)
+		}
 	})
-	if err != nil {
-		t.Fatalf("Track returned error: %v", err)
-	}
-
-	timings := tracker.GetTimings()
-	if len(timings) != 1 {
-		t.Fatalf("expected 1 timing entry, got %d", len(timings))
-	}
-	if timings[0].Name != "testPhase" {
-		t.Errorf("expected name=testPhase, got %s", timings[0].Name)
-	}
-	if timings[0].DurationMs < 0 {
-		t.Errorf("expected non-negative duration, got %d", timings[0].DurationMs)
-	}
 }
 
 func TestTracker_Disabled(t *testing.T) {
@@ -102,24 +105,26 @@ func TestTracker_IsEnabled(t *testing.T) {
 }
 
 func TestTracker_TrackRecordsDuration(t *testing.T) {
-	tracker := New(true)
+	synctest.Test(t, func(t *testing.T) {
+		tracker := New(true)
 
-	err := tracker.Track("slow", func() error {
-		time.Sleep(10 * time.Millisecond)
-		return nil
+		err := tracker.Track("slow", func() error {
+			time.Sleep(10 * time.Millisecond) // virtual time
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Track returned error: %v", err)
+		}
+
+		timings := tracker.GetTimings()
+		if len(timings) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(timings))
+		}
+		// The bubble clock advances by exactly the sleep.
+		if timings[0].DurationMs != 10 {
+			t.Errorf("expected duration = 10ms, got %d", timings[0].DurationMs)
+		}
 	})
-	if err != nil {
-		t.Fatalf("Track returned error: %v", err)
-	}
-
-	timings := tracker.GetTimings()
-	if len(timings) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(timings))
-	}
-	// 10ms sleep should produce at least a few ms of recorded duration
-	if timings[0].DurationMs < 5 {
-		t.Errorf("expected duration >= 5ms, got %d", timings[0].DurationMs)
-	}
 }
 
 func TestTracker_TrackPropagatesError(t *testing.T) {
@@ -199,19 +204,21 @@ func TestTracker_GetTimingsReturnsCopy(t *testing.T) {
 }
 
 func TestTracker_SerialRecordsDuration(t *testing.T) {
-	tracker := New(true)
+	synctest.Test(t, func(t *testing.T) {
+		tracker := New(true)
 
-	child := tracker.Serial("timed-section")
-	time.Sleep(10 * time.Millisecond)
-	child.End()
+		child := tracker.Serial("timed-section")
+		time.Sleep(10 * time.Millisecond) // virtual time
+		child.End()
 
-	timings := tracker.GetTimings()
-	if len(timings) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(timings))
-	}
-	if timings[0].DurationMs < 5 {
-		t.Errorf("expected serial duration >= 5ms, got %d", timings[0].DurationMs)
-	}
+		timings := tracker.GetTimings()
+		if len(timings) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(timings))
+		}
+		if timings[0].DurationMs != 10 {
+			t.Errorf("expected serial duration = 10ms, got %d", timings[0].DurationMs)
+		}
+	})
 }
 
 func TestTracker_SerialChildIsEnabled(t *testing.T) {
@@ -283,64 +290,70 @@ func TestTracker_EndReturnsParent(t *testing.T) {
 }
 
 func TestTracker_ConcurrentAccess(t *testing.T) {
-	tracker := New(true)
+	synctest.Test(t, func(t *testing.T) {
+		tracker := New(true)
 
-	const goroutines = 20
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
+		const goroutines = 20
+		var wg sync.WaitGroup
+		wg.Add(goroutines)
 
-	for i := range goroutines {
-		go func(_ int) {
-			defer wg.Done()
-			name := "goroutine"
-			_ = tracker.Track(name, func() error {
-				time.Sleep(time.Millisecond)
-				return nil
-			})
-		}(i)
-	}
+		for i := range goroutines {
+			go func(_ int) {
+				defer wg.Done()
+				name := "goroutine"
+				_ = tracker.Track(name, func() error {
+					// Virtual time: every Track overlaps the others.
+					time.Sleep(time.Millisecond)
+					return nil
+				})
+			}(i)
+		}
 
-	wg.Wait()
+		wg.Wait()
 
-	timings := tracker.GetTimings()
-	if len(timings) != goroutines {
-		t.Errorf("expected %d entries from concurrent Track calls, got %d", goroutines, len(timings))
-	}
+		timings := tracker.GetTimings()
+		if len(timings) != goroutines {
+			t.Errorf("expected %d entries from concurrent Track calls, got %d", goroutines, len(timings))
+		}
+	})
 }
 
 func TestTracker_ConcurrentSerialEnd(t *testing.T) {
-	tracker := New(true)
+	synctest.Test(t, func(t *testing.T) {
+		tracker := New(true)
 
-	const goroutines = 10
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
+		const goroutines = 10
+		var wg sync.WaitGroup
+		wg.Add(goroutines)
 
-	for range goroutines {
-		go func() {
-			defer wg.Done()
-			child := tracker.Serial("concurrent-child")
-			_ = child.Track("work", func() error {
-				time.Sleep(time.Millisecond)
-				return nil
-			})
-			child.End()
-		}()
-	}
-
-	wg.Wait()
-
-	timings := tracker.GetTimings()
-	if len(timings) != goroutines {
-		t.Errorf("expected %d entries from concurrent Serial/End, got %d", goroutines, len(timings))
-	}
-	for i, entry := range timings {
-		if entry.Name != "concurrent-child" {
-			t.Errorf("entry[%d]: expected name=concurrent-child, got %s", i, entry.Name)
+		for range goroutines {
+			go func() {
+				defer wg.Done()
+				child := tracker.Serial("concurrent-child")
+				_ = child.Track("work", func() error {
+					// Virtual time: every Serial section overlaps the others.
+					time.Sleep(time.Millisecond)
+					return nil
+				})
+				child.End()
+			}()
 		}
-		if len(entry.Children) != 1 {
-			t.Errorf("entry[%d]: expected 1 child, got %d", i, len(entry.Children))
+
+		wg.Wait()
+
+		timings := tracker.GetTimings()
+		if len(timings) != goroutines {
+			t.Errorf("expected %d entries from concurrent Serial/End, got %d", goroutines, len(timings))
 		}
-	}
+		for i, entry := range timings {
+			if entry.Name != "concurrent-child" {
+				t.Errorf("entry[%d]: expected name=concurrent-child, got %s", i, entry.Name)
+			}
+			if len(entry.Children) != 1 {
+				t.Errorf("entry[%d]: expected 1 child, got %d", i, len(entry.Children))
+			}
+		}
+	})
 }
 
 func TestAddEntry(t *testing.T) {

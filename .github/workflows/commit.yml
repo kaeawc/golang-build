@@ -287,6 +287,29 @@ jobs:
           version: '~> v2'
           args: check
 
+  template-rename:
+    # Proves `make rename` still turns the template into a working project:
+    # renames a scratch copy to a throwaway module path, checks nothing
+    # names the old one, then formats, lints, tests and builds it there.
+    # Delete this job once you have renamed your copy.
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Git Checkout"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: "Set up Go"
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+
+      - name: "Rename a scratch copy, then check, build and test it"
+        run: make rename-test
+
   codeql-analysis:
     runs-on: ubuntu-latest
     permissions:
