@@ -249,6 +249,48 @@ func TestCloudflareAccess_BadSignatureRejected(t *testing.T) {
 	}
 }
 
+// A signature that decodes to the same bytes through a non-canonical
+// encoding must still be rejected, or one token has many accepted spellings
+// and anything keyed by the token string (revocation, replay) is bypassable.
+func TestCloudflareAccess_NonCanonicalSignatureRejected(t *testing.T) {
+	k, _ := rsa.GenerateKey(rand.Reader, 2048)
+	const kid = "k1"
+	jwksSrv := newJWKSServer(t, kid, &k.PublicKey)
+	defer jwksSrv.Close()
+	hc := &http.Client{Transport: rewriteHost{target: jwksSrv.URL}}
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	ca := auth.NewCloudflareAccess(auth.CloudflareConfig{
+		TeamDomain: "test", AppAUD: "aud-123",
+		HTTPClient: hc, Clock: fakeClock{t: now},
+	})
+	tok := signJWT(t, k, kid, map[string]any{
+		"iss": "https://test.cloudflareaccess.com",
+		"aud": "aud-123", "sub": "u",
+		"exp": now.Add(time.Hour).Unix(),
+	})
+	identify := func(tok string) error {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set(auth.HeaderCloudflareAccess, tok)
+		_, err := ca.Identify(r)
+		return err
+	}
+	if err := identify(tok); err != nil {
+		t.Fatalf("canonical token: %v", err)
+	}
+
+	// A 256-byte signature leaves 4 unused bits in the last base64 char;
+	// flipping one yields a different string that decodes identically.
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	last := strings.IndexByte(alphabet, tok[len(tok)-1])
+	padded := tok[:len(tok)-1] + string(alphabet[last^1])
+	withNewline := tok[:len(tok)-10] + "\n" + tok[len(tok)-10:]
+	for name, bad := range map[string]string{"padding bits": padded, "newline": withNewline} {
+		if err := identify(bad); !errors.Is(err, auth.ErrInvalidToken) {
+			t.Errorf("%s: got %v, want ErrInvalidToken", name, err)
+		}
+	}
+}
+
 // --- helpers ---
 
 type fakeClock struct{ t time.Time }

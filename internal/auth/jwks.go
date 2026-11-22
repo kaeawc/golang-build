@@ -176,7 +176,7 @@ func verifyRS256(token string, getKey func(kid string) (*rsa.PublicKey, error)) 
 	if err != nil {
 		return nil, err
 	}
-	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	sig, err := decodeCanonical(parts[2])
 	if err != nil {
 		return nil, fmt.Errorf("%w: sig b64: %w", ErrInvalidToken, err)
 	}
@@ -190,4 +190,21 @@ func verifyRS256(token string, getKey func(kid string) (*rsa.PublicKey, error)) 
 		return nil, fmt.Errorf("%w: payload b64: %w", ErrInvalidToken, err)
 	}
 	return payload, nil
+}
+
+var errNonCanonical = errors.New("non-canonical encoding")
+
+// decodeCanonical accepts only the one base64url encoding of the bytes.
+// The lenient decoder ignores CR/LF and the unused low bits of the last
+// character, which would give one signed token many valid spellings and
+// defeat anything keyed by the token string (revocation, replay caches).
+func decodeCanonical(s string) ([]byte, error) {
+	b, err := base64.RawURLEncoding.Strict().DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+	if base64.RawURLEncoding.EncodedLen(len(b)) != len(s) {
+		return nil, errNonCanonical
+	}
+	return b, nil
 }
